@@ -1,0 +1,9 @@
+First paragraph on its own.   
+
+Second paragraph which contains
+an internal single newline that must become a hardBreak
+and then a third line.
+
+Third paragraph.	
+
+Fourth and final paragraph.

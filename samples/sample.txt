@@ -1,0 +1,6 @@
+A sample plain-text document.
+
+Upload it on the dashboard to see it become an editable document.
+
+Blank lines separate paragraphs; single newlines inside a paragraph
+become line breaks.

@@ -319,3 +319,64 @@ Vercel: import the repo, set the three env vars in **both** Production and Previ
 function region to **`iad1`** explicitly, and turn **Deployment Protection off** (R7 — an SSO
 wall looks perfectly healthy to the owner and blocks every reviewer). Seeding production waits
 on T04's `prisma/seed.ts`, currently in flight.
+
+## D010 — Mammoth silently drops underline. `styleMap: ['u => u']` is MANDATORY.
+
+**Found 2026-09-01 while building the import fixtures, before T12 was written.**
+
+`mammoth.convertToHtml()` with default options **discards underline formatting entirely**.
+Verified against the real `sample.docx` fixture:
+
+```
+default:                 ... an <em>italic run</em> and an underlined run in the same sentence.
+styleMap: ['u => u']:    ... an <em>italic run</em> and an <u>underlined run</u> in the same sentence.
+```
+
+Bold (`<strong>`) and italic (`<em>`) survive by default; underline does not. Mammoth omits it
+deliberately, because Word documents frequently use underline as link decoration rather than as
+semantic emphasis. That reasoning does not apply here — our editor exposes Underline as a
+first-class formatting control.
+
+### Why this mattered enough to rule on
+
+**Underline is requirement C5.** Without the style map, importing a `.docx` loses every underline
+with no error, no warning and no failing test — the import returns `201`, the document opens, and
+the formatting is simply gone. It is precisely the class of bug that survives to a demo.
+
+### Binding on T12
+
+```ts
+const { value: html } = await mammoth.convertToHtml(
+  { buffer },
+  { styleMap: ['u => u'] },   // REQUIRED — see D010. Do not remove as "unnecessary config".
+);
+```
+
+The comment is part of the ruling: a later reader tidying up an options object that looks
+redundant reintroduces the bug.
+
+### The full pipeline is verified, not assumed
+
+Both import paths were run end to end against the committed fixtures, through the real
+`schemaExtensions` from `lib/editor-extensions.ts`:
+
+| Path | Result |
+|---|---|
+| `.docx` → mammoth (with styleMap) → `generateJSON` | doc root · heading 1 · heading 2 · bold · italic · **underline** · bulletList |
+| `.md` → `marked` → `generateJSON` | headings 1–3 · bold · italic · underline · bulletList · orderedList |
+| `.md` unsupported constructs | `codeBlock` **dropped** · `link` mark **dropped** · link *text* survives as plain text |
+
+That last row is the security claim from `05-import-spec.md` §6 demonstrated rather than
+asserted: TipTap's schema filtering — not a sanitizer library — is what removes anything outside
+the allowed node and mark set.
+
+### Fixtures committed
+
+`tests/fixtures/import/`: `valid-all-constructs.md`, `plain.txt` (CRLF, trailing whitespace,
+internal single newlines), `sample.docx` (a genuine Word 2007+ file authored via LibreOffice,
+6.5 KB), `whitespace-only.md`, `empty.txt` (0 bytes), `fake.md` (an `MZ`-magic stub, 299 bytes,
+**not** a real executable), and `make-oversized.ts` which generates the over-cap file at test
+setup rather than committing 2 MB of filler into every clone.
+
+`samples/` holds reviewer-facing copies plus a README, so `SUBMISSION.md`'s "Review in 60
+seconds" points at files that exist.
