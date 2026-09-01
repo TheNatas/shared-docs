@@ -88,13 +88,22 @@ The gate asserted `users: 3` rather than `db: "up"`, which is the only reason it
 demo.
 
 **UX quality.** There is no automated browser coverage. That is the one real omission, it is named
-as such in `specs/06-test-plan.md` §6, and it is the first thing I would build with more time. In its
-place is a 24-step manual checklist (§9 of the same file) run against the **deployed** URL, not
-localhost, in two side-by-side browsers — Alice in a normal window, Carol in a private one, so the
-cookie jars are genuinely separate. It covers the states that carry the product claims: the
-read-only banner, a not-found page rather than a permission-denied page for a document you cannot
-see, a devtools `PATCH` returning `403` while the toolbar is hidden, the conflict banner and its
-**Reload**, and the inline error for a rejected file type.
+as such in `specs/06-test-plan.md` §6, and it is the first thing I would build with more time.
+
+What *was* done: the deployed UI was driven with Playwright to confirm the screens actually render
+and the controls actually exist — the demo-account buttons, the dashboard's two sections, the
+editor toolbar's `aria-label`s and keyboard-shortcut titles, the import control's `accept` list and
+its limits copy, and the share dialog's fields. That pass earned its keep immediately: it found that
+`ShareDialog` had been **built but never mounted**, so the app had no Share button at all. The API
+tests were green throughout, because the share *routes* were correct — an API suite structurally
+cannot see an unmounted component. One line fixed it.
+
+A 24-step manual checklist (`specs/06-test-plan.md` §9) defines the rest of the pass — two
+side-by-side browsers, Alice in a normal window and Carol in a private one so the cookie jars are
+genuinely separate, covering the read-only banner, a not-found page rather than a permission-denied
+page, a devtools `PATCH` returning `403` while the toolbar is hidden, the conflict banner and its
+**Reload**, and the inline error for a rejected file type. It is the procedure of record; it has not
+been run end-to-end by hand, and I am not claiming otherwise.
 
 **Reliability.** The app was deployed at hour 2, not hour 7, precisely so a failure would be cheap —
 and the gate earned it immediately by catching the missing seed above. It also asserts that

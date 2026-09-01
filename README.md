@@ -316,7 +316,6 @@ Deliberate scope cuts, not defects, except where marked. The reasoning is in
 - **Formatting is limited** to bold, italic, underline, H1–H3, and bulleted/numbered lists.
   No tables, images, code blocks, colours or fonts, in the editor or through import.
 - **Imported files are not retained** — only the parsed document and the original filename.
-- **No public links.** Sharing is user-to-user only.
 - **No comments, suggestions, presence indicators, or version history.**
 - **No folders, tags, search, trash, or pagination.**
 - **Desktop-first.** The editor is usable on a tablet but is not optimised for phones.
