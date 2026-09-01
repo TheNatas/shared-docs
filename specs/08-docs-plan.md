@@ -362,8 +362,9 @@ These are deliberate scope cuts, not defects. The reasoning for each is in
 [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 - **No real-time collaboration.** Two people editing the same document will not see each
-  other's keystrokes. The second save is rejected with a `409` and the UI offers to reload,
-  so you get a visible conflict instead of silent data loss.
+  other's keystrokes. The second save is rejected with a `409`, autosave stops, and a banner
+  offers a **Reload** — so you get a visible conflict instead of silent data loss. Reloading
+  is the only recovery; there is no merge.
 - **No public links.** Sharing is user-to-user only; there is no "anyone with the link" mode.
 - **No comments, suggestions, or presence indicators.**
 - **Formatting is limited** to bold, italic, underline, H1–H3, and bulleted/numbered lists.
@@ -475,13 +476,20 @@ the resolver's signature and the full matrix.
 
 **§4 Autosave and conflicts — the honest answer.** This section is where the "no real-time
 collaboration" cut is *defended* rather than confessed. Structure: what we do (debounced
-autosave sends the document with the `updatedAt` it was loaded at; the server compares and
-rejects a stale write with `409`; the client offers a reload), what that gets us
-(last-write-wins, but never silently — the loser is told), what it does not get us (two
-people typing at once still means one of them reloads), and why that was the right call at
-this size (a correct CRDT or OT layer is days of work and a websocket server; a wrong one is
-worse than none). Close on the line that makes it a judgement call rather than a shortcut:
+autosave sends the document with the `updatedAt` it was loaded at; the server makes the write
+*conditional* on that token and rejects a stale one with `409`; the client suspends autosave
+and shows an inline banner with a **Reload**), what that gets us (last write wins, but never
+silently — the second writer is told rather than quietly overwritten), what it does not get us
+(two people typing at once still means one of them reloads), and what a real implementation
+would need (ProseMirror **steps** rather than whole-document snapshots, a monotonic **version
+column** on the document, and a **transform/rebase** path that replays a client's steps on top
+of the ones it missed — days of work and a websocket server, and a wrong one is worse than
+none). Close on the line that makes it a judgement call rather than a shortcut:
 *stating the limit and handling it beats pretending it does not exist.*
+
+**Do not describe a conflict dialog, a merge UI, or a "copy my text" escape hatch** — none of
+them ship (`DECISIONS.md` D002). The banner and its **Reload** are the entire recovery
+affordance, and the paragraph is graded on being true about the build in front of the reviewer.
 
 **§5 Import without blob storage.** Parse server-side, persist the result as document
 content, keep only `sourceFilename` as provenance. Consequences worth naming: zero
@@ -597,7 +605,7 @@ Rules for the rows:
 | Asked | Answer with |
 |---|---|
 | Correctness | The test suites and what they actually cover — the permission matrix, the import parsers, the `409` path. Include one bug the tests caught. |
-| UX quality | Manual walkthrough as all three seeded users, the specific flows checked (read-only banner, share dialog, conflict reload, import errors), and the clean-clone README run (§7.3 of this spec). |
+| UX quality | Manual walkthrough as all three seeded users, the specific flows checked (read-only banner, share dialog, the conflict banner and its **Reload**, import errors), and the clean-clone README run (§7.3 of this spec). |
 | Reliability | Deploying at hour 2 rather than hour 7, the first failed deploy and what it taught, `pnpm build` clean, and the honest limits (no load testing, no error monitoring). |
 
 ### 4.2 Tone
@@ -1000,7 +1008,9 @@ Verifiable statements for this slice. All must be true before submission.
 - [ ] `ARCHITECTURE.md` exists, answers "what did you prioritise and why" in its **first**
       paragraph, and `wc -w` reports between 800 and 1200.
 - [ ] `ARCHITECTURE.md` contains all eight sections from §3.1, including the 403-vs-404 rule,
-      the autosave/optimistic-concurrency answer, the deliberate-cuts table sourced from
+      the autosave/optimistic-concurrency answer — conditional update → `409` → banner with
+      **Reload**, plus what a real implementation would need, and **no** conflict dialog and no
+      "copy my text" (`DECISIONS.md` D002) — the deliberate-cuts table sourced from
       `00-foundation.md` §4, a trade-offs table containing the `/api/users` enumeration row,
       and a ranked "what I would build next" list.
 - [ ] `AI-WORKFLOW.md` exists with exactly four top-level numbered sections matching the

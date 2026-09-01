@@ -820,7 +820,7 @@ budget.
 | 3 | **`GET /api/documents/d2`** | **carol** | **`404` `NOT_FOUND`** | **not `403`** — no-access must not confirm existence (foundation §6 rule 1) | **P0** |
 | 4 | **`PATCH /api/documents/d1`** | **carol** | **`403` `FORBIDDEN`** | row's `content` and `updatedAt` unchanged in the DB | **P0** |
 | 5 | **`PATCH /api/documents/d1`** with fresh token | **bob** | **`200`** | persisted `content` matches; response `updatedAt` > fixture `updatedAt` | **P0** |
-| 6 | **`PATCH /api/documents/d1`** with `lastKnownUpdatedAt` one hour in the past | **alice** | **`409` `CONFLICT`** | row unchanged; body carries the server's current `updatedAt` so the client can offer reload (foundation §7, risk R4) | **P0** |
+| 6 | **`PATCH /api/documents/d1`** with `lastKnownUpdatedAt` one hour in the past | **alice** | **`409` `CONFLICT`** | row unchanged; body carries the server's current `updatedAt` in `details.currentUpdatedAt`, which is what the inline conflict banner's **Reload** re-seeds from (foundation §7, risk R4) | **P0** |
 | 7 | `PATCH /api/documents/d1` with `content: { type: 'paragraph' }` | alice | `400` `VALIDATION_FAILED` | shape guard (§4.3) is wired into the route, not just unit-tested | P1 |
 | 8 | `DELETE /api/documents/d1` | bob | `403` `FORBIDDEN` | document still exists — EDITOR ≠ owner | P1 |
 | 9 | **`POST /api/documents/d1/shares`** `{email: carol, role: VIEWER}` | **bob** | **`403` `FORBIDDEN`** | an EDITOR cannot re-share; share count still 2 | **P0** |
@@ -840,6 +840,14 @@ budget.
 
 Case 19 is the one that catches the mistake most likely to actually happen at hour six: adding a route
 and forgetting the auth guard.
+
+**Case 6 is the only conflict case, deliberately (D002).** The suite asserts that the guard *fires* —
+a stale token never writes, and the client is handed the current one — and stops there. Recovery is a
+single **Reload** button in an inline banner: no dialog, no "copy my text" clipboard path, and no
+request-merging queue, so there is nothing on the recovery side left to cover at this level. The
+second, recovery-side integration case is struck; it is not in the table above and **must not be added
+back** — the reduced conflict system is a ~30-minute slice, and a second case is how it grows back
+into the 1h15 D002 declined to spend. What a reviewer sees of recovery is manual QA step 20 (§9).
 
 ### 5.8 Representative test file
 
@@ -929,7 +937,7 @@ describe('PATCH /api/documents/:id', () => {
 
     expect(status).toBe(409);
     expect(body.error.code).toBe('CONFLICT');
-    // The client needs the current token to offer "reload and retry".
+    // The inline conflict banner's Reload re-seeds the editor from this token.
     expect(body.error.details.currentUpdatedAt).toBe(before.updatedAt.toISOString());
 
     const after = await prisma.document.findUniqueOrThrow({ where: { id: DOCS.d1 } });
@@ -1154,7 +1162,7 @@ Total run time: ~8 minutes. It doubles as the video storyboard.
 | 17 | Browser A: change Carol's role to **Editor** | Badge updates in place; the share list still has exactly one Carol row (upsert, not duplicate) |
 | 18 | Browser B: reload | Editor is now writable; Carol types a sentence; it saves |
 | 19 | Browser A: reload | Carol's sentence is visible — shared persistence round-trips (C12) |
-| 20 | Both browsers open on the same document: A edits and saves, then B (whose tab has been idle) edits and saves | B gets a clear **"this document changed elsewhere"** conflict with a reload action — no silent data loss (foundation §4, R4) |
+| 20 | Both browsers open on the same document: A edits and saves, then B (whose tab has been idle) edits and saves | B gets an **inline amber banner** inside the editor — **"This document changed elsewhere."** with a **Reload** button (`04-ui-spec.md` owns the copy; D002). **No modal opens**, and there is no "copy my text" affordance — **Reload** is the only action offered. Autosave is suspended while the banner is up, so the save status never settles on "Saved"; clicking **Reload** re-fetches the document and B sees A's text. No silent data loss (foundation §4, R4) |
 | 21 | Browser A: **Share** → `alice@example.com` (her own address) | Inline error, no share created (§6 rule 4) |
 | 22 | Browser B: attempt to open the Share dialog as Editor | Not offered — an editor cannot re-share (matches integration case 9) |
 | 23 | Browser A: revoke Carol's access; Browser B: reload | Document disappears from Carol's dashboard; opening the old URL gives not-found |
@@ -1233,7 +1241,7 @@ now decided in `00-foundation.md`, and where the sibling won, **this file change
 - [ ] `tests/integration/setup.ts` truncates all three tables and reseeds fixtures in `beforeEach`; the integration project runs single-fork with `fileParallelism: false`.
 - [ ] The fixture graph is exactly: alice owns d1 (bob `EDITOR`, carol `VIEWER`), alice owns d2 (no shares), bob owns d3 — with fixed ids `u_alice`/`u_bob`/`u_carol` and `d1`/`d2`/`d3`.
 - [ ] `tests/integration/helpers/request.ts` exports `authedRequest`, `ctx`, `fileForm` and `read`, and mints cookies by calling the **production** `signSessionToken(user)` from `@/lib/session-token`, not a re-implementation.
-- [ ] Every **P0** row of §5.7 is implemented and green — in particular: d2-as-carol is **404 and not 403**; carol's `GET` of d1 has `shares === null`; `PATCH` d1 as carol is 403 with the row provably unchanged; `PATCH` d1 as bob is 200 with content persisted; a stale `lastKnownUpdatedAt` is 409 with the current token in `details`; `POST` shares as bob is 403; re-sharing carol leaves **two** share rows with her role updated; sharing with self is 400; bob's list has d3 in `owned`, d1 in `sharedWithMe`, and d2 in neither; `.exe` import is **415** `UNSUPPORTED_FILE_TYPE`; over-cap import is **413** `FILE_TOO_LARGE`; and all four listed handlers return 401 with no cookie.
+- [ ] Every **P0** row of §5.7 is implemented and green — in particular: d2-as-carol is **404 and not 403**; carol's `GET` of d1 has `shares === null`; `PATCH` d1 as carol is 403 with the row provably unchanged; `PATCH` d1 as bob is 200 with content persisted; a stale `lastKnownUpdatedAt` is 409 with the current token in `details` — **the only conflict case; no recovery case is added (D002)**; `POST` shares as bob is 403; re-sharing carol leaves **two** share rows with her role updated; sharing with self is 400; bob's list has d3 in `owned`, d1 in `sharedWithMe`, and d2 in neither; `.exe` import is **415** `UNSUPPORTED_FILE_TYPE`; over-cap import is **413** `FILE_TOO_LARGE`; and all four listed handlers return 401 with no cookie.
 - [ ] Integration assertions check `error.code`, never `error.message`.
 - [ ] `pnpm test` (both projects) passes locally with Docker running; the integration project finishes in under 30s warm.
 - [ ] `README.md` contains the §7 command block verbatim, lists `pnpm test:unit` first, and states that Docker is required only for `test:integration`.

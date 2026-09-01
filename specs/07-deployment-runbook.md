@@ -83,7 +83,7 @@ production alive".
 | 0:00–0:15 | Scaffold + `pnpm install` at the pins in `00-foundation.md` §2a | `pnpm build` green locally |
 | 0:15–0:45 | R1 spike (`@tiptap/html` on Node) — the clock cannot start before `pnpm add` has finished | decided, per `00-foundation.md` §9 |
 | 0:45–2:00 | Neon project, schema, first migration, auth skeleton | local `pnpm dev` works |
-| **~2:00** | **DEPLOY #1 — the trivial slice** | public URL, `/api/health` green, **Deployment Protection off** |
+| **~2:00** | **DEPLOY #1 — the trivial slice** | public URL, `/api/health` green, **function region explicitly set to `iad1`**, **Deployment Protection off** |
 | 2:00–5:30 | Product work; push to `main` freely (each push auto-deploys) | features |
 | **5:30** | **Feature freeze + DEPLOY #2** | full smoke test passes |
 | 5:30–7:00 | Docs, README, ARCHITECTURE.md, AI-WORKFLOW.md | — |
@@ -107,7 +107,7 @@ Verified on 2026-09-01, working directory `~/Documents/natas/shared-docs`:
 |---|---|---|
 | Node | `v22.20.0` | ✅ matches the `engines` pin below |
 | pnpm | `10.34.3` | ✅ |
-| `gh` (GitHub CLI) | `2.74.0`, authenticated | ✅ used to create the repo |
+| `gh` (GitHub CLI) | `2.74.0`, authenticated, **snap-confined** | ✅ already used to create the repo (D004). It cannot `exec ssh`, so `origin` is **HTTPS** + `credential.helper = !gh auth git-credential` — see §6 step 2 |
 | `openssl` | `3.0.2` | ✅ used for `AUTH_SECRET` |
 | Vercel CLI | **NOT INSTALLED** | install only if you take the CLI path (§4b) |
 | Vercel account | exists | ✅ no signup needed |
@@ -124,13 +124,15 @@ Accounts already exist, so everything below is **setup**, not signup.
 1. Open <https://console.neon.tech> → **New Project**.
 2. **Name:** `shared-docs`.
 3. **Postgres version:** accept the default (17 or newer). We use no version-specific SQL.
-4. **Cloud provider / region:** **AWS · `us-east-1` (N. Virginia)** unless you know the
-   reviewers are elsewhere. See the open question at the bottom — this is the one Neon
-   decision that is **effectively irreversible on the free tier**, because the project's
-   region cannot be changed after creation (you would delete the project and re-create it).
-   Pair it with the Vercel function region in §5.4 so the serverless function and the
-   database sit in the same datacentre; the alternative is ~100 ms of transatlantic latency
-   on *every* Prisma query, which reviewers feel as a sluggish editor.
+4. **Cloud provider / region:** **AWS · `us-east-1` (N. Virginia)**. This is **decided**
+   (`DECISIONS.md` D003) — not a default to re-open on the day. Reviewers are US-based, and
+   Neon's free tier has no South America region, so this would have been the answer
+   regardless of the author's own location. It is also the one Neon decision that is
+   **effectively irreversible on the free tier**, because the project's region cannot be
+   changed after creation (you would delete the project and re-create it). §4a step 7 pairs
+   it with an **explicitly set** Vercel function region (`iad1`) so the serverless function
+   and the database sit in the same datacentre; the alternative is ~100 ms of transatlantic
+   latency on *every* Prisma query, which reviewers feel as a sluggish editor.
 5. **Database name:** accept `neondb`. **Role:** accept `neondb_owner`.
 6. Click **Create**. Total: under a minute.
 
@@ -252,7 +254,9 @@ Whichever you pick, do not do both halfway.
 
 ### 4a. Dashboard path — "Import Git Repository"
 
-Assumes §6 step 1 has already pushed the repo to GitHub.
+The repo already exists and is public at `github.com/TheNatas/shared-docs`, pushed before the
+build started (`DECISIONS.md` D004), so this path works exactly as written — §6 steps 1–2 are
+a verification, not a creation.
 
 1. <https://vercel.com/dashboard> → **Add New…** → **Project**.
 2. Under **Import Git Repository**, find `TheNatas/shared-docs`. If it is not listed, click
@@ -270,8 +274,12 @@ Assumes §6 step 1 has already pushed the repo to GitHub.
 5. Click **Deploy**. Watch the build log. Expect ~60–120 s.
 6. When it finishes, open **Settings → General → Node.js Version** and confirm **22.x**.
    Change it if not, then redeploy.
-7. **Settings → Functions → Function Region** → set to the region matching Neon
-   (`us-east-1` → **Washington, D.C., USA (iad1)**). Redeploy.
+7. **Settings → Functions → Function Region** → **explicitly select Washington, D.C., USA
+   (`iad1`)** to match Neon's `us-east-1` (`DECISIONS.md` D003). Do **not** skip this on the
+   assumption that the inherited default is already `iad1`: an unset region is *not* a
+   guarantee — it can differ per account and it can change under you, and the only symptom is
+   every Prisma query paying a cross-region round trip, which shows up as a sluggish editor
+   behind a green build and a green `/api/health`. Set the field, read it back, then redeploy.
 7b. 🚨 **Settings → Deployment Protection → confirm it is DISABLED for Production.** On some Vercel
    plans "Vercel Authentication" is on by default; when it is, every visitor who is not a member of
    your team gets an SSO wall instead of the app. **Then verify it, from a logged-out incognito
@@ -308,6 +316,11 @@ printf '%s' "$(openssl rand -base64 32)"                            | vercel env
 vercel env ls                   # verify: 3 names × 2 environments
 vercel --prod                   # build and promote to production
 ```
+
+**On this path you must still set the function region explicitly** (`DECISIONS.md` D003): the
+CLI does not set it for you and the inherited default is not a guarantee. Either
+Settings → Functions → Function Region → **Washington, D.C., USA (`iad1`)** in the dashboard,
+or commit a `vercel.json` containing `{ "regions": ["iad1"] }`.
 
 Useful afterwards:
 
@@ -455,10 +468,11 @@ The model definitions are canonical in `00-foundation.md` §5 and are not restat
 
 Run in order. Nothing here requires a decision.
 
-**1. Give `shared-docs` its own git repository, and hide it from the parent.**
+**1. Give `shared-docs` its own git repository, and hide it from the parent. — ✅ DONE.**
 
 `~/Documents/natas` is itself a git repo (`00-foundation.md` §2: "never `git add` it from the
-parent"). Vercel imports a *GitHub repo*, so `shared-docs` needs to be one:
+parent"). Vercel imports a *GitHub repo*, so `shared-docs` needs to be one. This was done
+before the build started (`DECISIONS.md` D004), with:
 
 ```bash
 cd /home/thenatas_/Documents/natas/shared-docs
@@ -470,12 +484,33 @@ git commit -m "chore: initial commit"
 echo "shared-docs/" >> /home/thenatas_/Documents/natas/.gitignore
 ```
 
-**2. Create the GitHub repo and push.**
+Do not re-run it — confirm instead:
+
+```bash
+git -C /home/thenatas_/Documents/natas/shared-docs rev-parse --abbrev-ref HEAD   # main
+grep -q '^shared-docs/$' /home/thenatas_/Documents/natas/.gitignore && echo "ok: hidden from parent"
+```
+
+**2. Create the GitHub repo and push. — ✅ DONE; the repo is public and already pushed.**
+
+`github.com/TheNatas/shared-docs` exists, is **public**, and carries the spec set as commit 1
+(`DECISIONS.md` D004); the implementation starts at commit 2, so the history shows the
+specification predating the build. Nothing to create — verify the remote and prove a push
+works, now, not at hour 2:
 
 ```bash
 cd /home/thenatas_/Documents/natas/shared-docs
-gh repo create TheNatas/shared-docs --public --source=. --remote=origin --push
+git remote -v                                 # origin  https://github.com/TheNatas/shared-docs.git
+git config --local --get credential.helper    # !gh auth git-credential
+git push                                      # must succeed
 ```
+
+> **The remote is HTTPS, not SSH, and that is deliberate.** The `gh` on this machine is
+> snap-confined and cannot `exec ssh`, so pushes authenticate through
+> `credential.helper = !gh auth git-credential`, already set in this repo's local config
+> (`DECISIONS.md` D004). Do not "tidy" the remote to `git@github.com:` — on the dashboard path
+> the push *is* the deploy trigger, so a push that fails at hour 2 blocks the deploy gate
+> outright. If it ever does, see §8.
 
 Then, before going further, confirm the two things that are invisible until they hurt:
 
@@ -604,6 +639,7 @@ Step 14 is the one a reviewer will actually try. It is worth the ten seconds.
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
+| `git push` fails: `Permission denied (publickey)`, `could not read Username for 'https://github.com'`, or `gh` erroring on `ssh` | The remote was switched to SSH, or the credential helper was dropped. The `gh` on this machine is **snap-confined and cannot `exec ssh`**, so SSH is not an option here (`DECISIONS.md` D004) | Put the remote back on HTTPS and restore the helper: `git remote set-url origin https://github.com/TheNatas/shared-docs.git` then `git config --local credential.helper '!gh auth git-credential'`. Re-run `gh auth status` if it still fails. On the dashboard path the push *is* the deploy trigger, so this blocks the hour-2 deploy gate — fix it before anything else. |
 | `PrismaClientInitializationError` in Vercel runtime logs | `DATABASE_URL` missing for the environment being served (set for Production only, hitting a Preview URL), or wrong/expired Neon password, or missing `sslmode=require` | `vercel env ls` — confirm the var exists for **both** Production and Preview. Re-copy the string from Neon. Redeploy (env changes need a new deployment). |
 | `Module not found: Can't resolve '@prisma/client'` at build | `prisma generate` never ran — missing root `postinstall`, or a cached `node_modules` skipped it | Restore **both** `"postinstall": "prisma generate"` and `"build": "prisma generate && next build"` (§5.1–5.2) — the second exists precisely because the first can be skipped. Then in Vercel: **Deployments → ⋯ → Redeploy** with **"Use existing Build Cache" unticked**. |
 | The production URL shows a **Vercel login / SSO wall** to anyone who is not you | Deployment Protection is enabled for Production | Settings → Deployment Protection → disable for Production, then **verify from a logged-out incognito window**. Invisible to you otherwise (§0, §4a step 7b). |
@@ -687,8 +723,8 @@ budget, a red CI run that blocks a deploy at hour 7 is a bigger risk than the bu
 
 ## Rulings and remaining open questions
 
-Items 2–5 were proposals and are now written into `00-foundation.md`; item 1 is genuinely still open
-and needs a human answer.
+Items 2–5 were proposals and are now written into `00-foundation.md`. **Nothing in this runbook is
+still open.** The one item that was — the Neon region — is ruled in `DECISIONS.md` D003.
 
 - ✅ **Pooled-URL query parameters are part of R2**: `?sslmode=require&pgbouncer=true` plus a
   connection limit on the pooled string. Without `pgbouncer=true` you get intermittent
@@ -702,12 +738,18 @@ and needs a human answer.
 - ✅ **Deployment Protection is now R2b in `00-foundation.md` §9**, checked at the hour-2 deploy from
   an incognito window. It was previously proposed only in `09-video-and-submission.md` and owned by
   nobody, which made it the highest-consequence unowned item in the set.
+- ✅ **Neon region is DECIDED: AWS `us-east-1`, paired with Vercel `iad1`** (`DECISIONS.md` D003).
+  Not a default and no longer a question. Reviewers are US-based and Neon's free tier has no
+  South America region, so location was never really in play. The region is fixed at project
+  creation, so it is settled before §2.1 runs — and the Vercel function region is **explicitly
+  set** to `iad1` in §4a step 7 (or §4b's note) rather than assumed. Record the region in the
+  README (Definition of done) and in `00-foundation.md` §2.
+- ✅ **The repo exists, is public, and is already pushed** — `github.com/TheNatas/shared-docs`,
+  spec set as commit 1, implementation from commit 2 (`DECISIONS.md` D004). §4a's "Import Git
+  Repository" path therefore runs as written. The remote is **HTTPS** with
+  `credential.helper = !gh auth git-credential`, because the snap-confined `gh` on this machine
+  cannot `exec ssh` (§6 step 2; failure mode in §8).
 
-1. ⏳ **Neon region is an unforced guess.** The brief does not say where the reviewers are, and
-   the free-tier region is fixed at project creation. This runbook defaults to AWS
-   `us-east-1` + Vercel `iad1`. **If the employer is EU-based, change both before §2.1** —
-   afterwards it costs a project re-create and a re-seed. Suggest recording the chosen region
-   in `00-foundation.md` §2 once known.
 2. **Pooled URL parameters are a refinement of R2.** `00-foundation.md` §9/R2 says the
    datasource declares `url` (pooled) and `directUrl` (unpooled) but does not mention query
    parameters. This spec requires `?sslmode=require&pgbouncer=true&connect_timeout=15` on the
@@ -732,8 +774,10 @@ and needs a human answer.
 
 ## Definition of done
 
-- [ ] A Neon project named `shared-docs` exists; its region is recorded in the README, and
-      the Vercel function region matches it.
+- [ ] A Neon project named `shared-docs` exists in **AWS `us-east-1`** (D003); the region is
+      recorded in the README, and the Vercel **Function Region has been explicitly set to
+      `iad1`** — verified by reading the field in Settings → Functions, not by assuming the
+      inherited default matches.
 - [ ] `DATABASE_URL` contains the substring `-pooler`; `DIRECT_URL` does not. Verified by
       eye immediately before the final deploy.
 - [ ] `prisma/schema.prisma` declares both `url` and `directUrl`.
@@ -749,6 +793,9 @@ and needs a human answer.
 - [ ] `.env` is gitignored and untracked (`git ls-files` shows no `.env`); `.env.example` is
       committed and lists all three variables with safe placeholders.
 - [ ] `prisma/migrations/` is committed and contains at least one `migration.sql`.
+- [ ] `git push` to `origin main` succeeds over the **HTTPS** remote
+      (`credential.helper = !gh auth git-credential`, D004), and
+      `github.com/TheNatas/shared-docs` loads **public** in a logged-out browser.
 - [ ] A production deployment existed **before hour 3**, and `/api/health` returned
       `{"ok":true,"db":"up","users":3}` on it.
 - [ ] **Deployment Protection is disabled for Production**, verified by loading the production URL

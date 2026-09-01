@@ -564,9 +564,11 @@ token, which is correct: it means "someone wrote after you read".
 type ConflictDetails = { currentUpdatedAt: string; lastKnownUpdatedAt: string };
 ```
 
-The 409 deliberately does **not** include the current content. The client's recovery is "Reload" —
-a plain `GET /api/documents/:id` — which keeps this response small and keeps one code path for
-loading a document. No merge, no diff; see `00-foundation.md` §4.
+The 409 deliberately does **not** include the current content. The client's recovery is **Reload**,
+offered in an inline banner (`04-ui-spec.md` §6.9) and never a modal — a plain `GET /api/documents/:id`,
+which keeps this response small and keeps one code path for loading a document. Reload is the *only*
+recovery action: `DECISIONS.md` **D002** cut the "copy my text" clipboard path. No merge, no diff;
+see `00-foundation.md` §4.
 
 ### 6.4 Sequence: two clients producing a 409
 
@@ -594,15 +596,23 @@ sequenceDiagram
     API->>DB: SELECT "updatedAt" WHERE id='d1'
     DB-->>API: T1  (row exists → stale token, not a deletion)
     API-->>B: 409 CONFLICT { currentUpdatedAt: T1, lastKnownUpdatedAt: T0 }
-    Note over B: UI: "This document changed elsewhere. [Reload]"<br/>B's edit is NOT written. Nothing is lost silently.
+    Note over B: Inline banner: "This document changed elsewhere. [Reload]"<br/>B's edit is NOT written. Nothing is lost silently.
 ```
 
 ### 6.5 Client-side rule (binding on the editor spec)
 
-The editor must keep **at most one in-flight `PATCH` per document**. Autosave debounces, and if a
-save is already in flight the next one queues and reuses the `updatedAt` returned by the one that
-landed. Firing two overlapping `PATCH`es from the same tab produces a self-inflicted 409 — that is
-R4, and the fix is serialization on the client, not loosening the check on the server.
+The editor must keep **at most one in-flight `PATCH` per document**. This is **mandatory, not
+advisory**: `DECISIONS.md` **D002** ships the single-in-flight **guard** and cuts the request-**merging
+queue**, and those are two different things. The guard is skip-if-in-flight plus a dirty flag — a
+boolean ref, roughly five lines. The queue was the `queue()` fold in `useAutosave` (`04-ui-spec.md`
+§7.2) that folded a pending patch into the in-flight one; it is gone. Deleting the guard along with
+the queue is exactly the mistake D002 exists to prevent: it keeps the 409 while removing its only
+mitigation, turning a correctness feature into a bug.
+
+So: autosave debounces, and if a save is already in flight the next tick is **skipped** — then one
+save re-fires on completion if the document is still dirty, reusing the `updatedAt` returned by the
+one that landed. Firing two overlapping `PATCH`es from the same tab produces a self-inflicted 409 —
+that is R4, and the fix is serialization on the client, not loosening the check on the server.
 
 ---
 

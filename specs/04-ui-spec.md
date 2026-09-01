@@ -10,7 +10,7 @@ exact shadcn/ui primitives to install, and an accessibility floor that is actual
 achievable in the budget. Server-side contracts (auth, `resolveAccess`, route
 handlers, import parsing) live in `00-foundation.md` §§6–7 and
 `03-auth-and-permissions.md`; this file only says how the client consumes them.
-**Slice budget: 3.5 h of the 8 h total.**
+**Slice budget: 3.25 h of the 8 h total.**
 
 ---
 
@@ -151,8 +151,7 @@ components/
 │   ├── ToolbarButton.tsx               Client  <button aria-pressed aria-label>
 │   ├── BlockTypeSelect.tsx             Client  Paragraph / H1 / H2 / H3
 │   ├── SaveStatus.tsx                  Client  state machine renderer, aria-live
-│   ├── ReadOnlyBanner.tsx              Server  Alert, rendered for VIEWER
-│   └── ConflictDialog.tsx              Client  409 recovery
+│   └── ReadOnlyBanner.tsx              Server  Alert, rendered for VIEWER
 ├── share/
 │   ├── ShareDialog.tsx                 Client  Dialog shell + data orchestration
 │   ├── ShareInviteForm.tsx             Client  email combobox + role select + Share
@@ -174,6 +173,10 @@ lib/                                    (all owned by other specs — this one i
 ├── import/constants.ts                 IMPORT_LIMITS_COPY, MAX_FILE_BYTES (05 §2.3)
 └── editor-extensions.ts                the single TipTap extension list  (05 §3.3)
 ```
+
+**There is no `ConflictDialog.tsx`.** Per `DECISIONS.md` D002 the 409 experience ships as an
+inline amber banner in the editor's existing status area, rendered by `SaveStatus.tsx` (§6.6, §6.9).
+No modal, and no component file of its own — do not create one.
 
 **This slice creates no `lib/` module of its own** except `lib/format.ts`. Everything else it
 imports. That is deliberate: every one of those files was, at some point in this spec set, defined
@@ -656,7 +659,7 @@ Active styling: `data-[active=true]:bg-accent data-[active=true]:text-accent-for
 | `saving` | spinner | `Saving…` | |
 | `saved` | ✓ | `Saved` for the first 5 s, then `Saved {relative}` (`just now` → `2 min ago`), ticked by a 30 s interval | |
 | `error` | ⚠ (destructive) | `Couldn't save` + inline `Retry` button (`variant="link"`, `aria-label="Retry saving"`) | |
-| `conflict` | ⚠ (amber) | `Changed elsewhere` + `Reload` button | `ConflictDialog` opens simultaneously |
+| `conflict` | ⚠ (amber) | `This document changed elsewhere.` + `Reload` button | renders as the inline amber banner of §6.9 — the status area expands in place. **No modal opens.** |
 
 **State machine**
 
@@ -671,7 +674,7 @@ Active styling: `data-[active=true]:bg-accent data-[active=true]:text-accent-for
         │                               │  (edit while saving)            │ ┌──────────┐
         │                               │                                 │ │ conflict │
    ┌────┴────┐  ◀────────────────────────────────────────────────────────┘ └──────────┘
-   │  saved  │                          200, nothing queued                  │
+   │  saved  │                          200, not dirty                       │
    └─────────┘                                                               │ reload
         │  queue(patch)                                                      ▼
         └──────────────▶ dirty                                    (content replaced,
@@ -684,11 +687,11 @@ Explicit transition table:
 
 | From | Trigger | To | Side effect |
 |---|---|---|---|
-| `idle`/`saved`/`error` | `queue(patch)` | `dirty` | merge patch into the pending object, (re)start debounce |
+| `idle`/`saved`/`error` | `queue(patch)` | `dirty` | merge patch into the pending object, (re)start debounce. This is the debounce-window merge (title + content share one body, §7.3 rule 4) — **not** a queue of requests |
 | `dirty` | debounce elapsed **or** `flush()` | `saving` | `PATCH` with the pending patch + `lastKnownUpdatedAt` |
-| `saving` | `200` and nothing queued meanwhile | `saved` | advance `lastKnownUpdatedAt` ref, set `lastSavedAt = new Date()` |
-| `saving` | `200` but an edit arrived mid-flight | `dirty` | advance token, immediately restart the debounce |
-| `saving` | `409 CONFLICT` | `conflict` | do **not** advance the token; suspend autosave; open `ConflictDialog` |
+| `saving` | `200` and the doc is not dirty | `saved` | advance `lastKnownUpdatedAt` ref, set `lastSavedAt = new Date()` |
+| `saving` | `200` but an edit arrived mid-flight | `dirty` | advance token, then re-fire **once** immediately (the doc is still dirty) — see §7.3 rule 3 |
+| `saving` | `409 CONFLICT` | `conflict` | do **not** advance the token; suspend autosave; flip the banner on via `onConflict()` |
 | `saving` | `403 FORBIDDEN` | `error` | copy: "You no longer have edit access." + `editor.setEditable(false)` |
 | `saving` | `404` | `error` | copy: "This document no longer exists." + link back to `/documents` |
 | `saving` | any other failure | `error` | keep the pending patch so `retry()` re-sends it |
@@ -750,35 +753,41 @@ The client hiding is a UX affordance only; the enforcement is the server's `403`
 Triggered when `PATCH` returns `409 CONFLICT` because someone else saved since our
 `lastKnownUpdatedAt`.
 
+It is an **inline amber banner, not a modal** (`DECISIONS.md` D002). It lives in the editor's
+existing status area — `SaveStatus` in the sticky top strip renders it as its `conflict` state —
+so there is no `ConflictDialog.tsx`, no focus trap, and nothing to dismiss.
+
 ```
-┌ This document changed elsewhere ───────────────────── ✕ ┐
-│                                                        │
-│  Someone else saved changes to "Team notes" while you  │
-│  were editing. Your recent edits haven't been saved.   │
-│                                                        │
-│  Reload to get the latest version. Copy your text      │
-│  first if you want to keep what you wrote.             │
-│                                                        │
-│              [ Copy my text ]  [ Reload latest ]       │
-└────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────────┐
+│ ← Documents                                  [ Share ]  [⋯]  Alice ▾      │
+│ ⚠ This document changed elsewhere.                         [ Reload ]     │  ← amber
+├───────────────────────────────────────────────────────────────────────────┤
+│ [B] [I] [U] │ [ Paragraph ▾ ] │ [ • List ] [ 1. List ] │ [ ↶ ] [ ↷ ]      │
+└───────────────────────────────────────────────────────────────────────────┘
 ```
+
+Copy is exactly `This document changed elsewhere.` — one sentence, amber (`⚠` icon,
+`text-amber-600` on `bg-amber-50`, or shadcn `Alert` with the same tint), full width of the strip,
+with a single `Reload` `Button` (`size="sm"`) at its right end.
 
 What the user sees and can do:
 
 1. Autosave stops immediately — no further `PATCH` is attempted, so we never overwrite the
    other person's work by accident.
-2. `SaveStatus` switches to the amber `Changed elsewhere` + `Reload` state and stays there
-   even if the dialog is dismissed.
-3. **Copy my text** (`variant="outline"`) → `navigator.clipboard.writeText(editor.getText())`,
-   button label flips to `Copied ✓` for 2 s. The escape hatch that makes losing work impossible.
-4. **Reload latest** (primary) → `GET /api/documents/:id` →
+2. `SaveStatus` switches to the amber banner and **stays there** until Reload — there is no
+   dismiss control, because a dismissible warning about unsaved work is a warning you can lose.
+3. **Reload** (the only action) → `GET /api/documents/:id` →
    `editor.commands.setContent(fresh.content)`, title state replaced,
-   `lastKnownUpdatedAt = fresh.updatedAt`, pending patch cleared, state → `saved`, dialog closes.
-5. Dismissing the dialog (✕ / Escape) leaves the editor editable but autosave suspended, with
-   the amber status as the standing reminder. Reopen via the `Reload` button in `SaveStatus`.
+   `lastKnownUpdatedAt = fresh.updatedAt`, pending patch cleared, autosave resumes, state → `saved`.
+   That is `autosave.resolveConflict(fresh)`; the banner disappears because the state left
+   `conflict`. Editing works normally again.
+4. The editor stays **editable** while the banner is up, so text is still selectable and copyable
+   by hand — but nothing is auto-saved, and Reload replaces the canvas. There is **no "Copy my
+   text" button and no clipboard code**: D002 cut it, and the recovery path is one button.
 
 This is the honest UI for the "no real-time collab" cut in `00-foundation.md` §4: last write
-wins, but never silently.
+wins, but never silently. The banner is what makes "never silently" true; the modal and the
+clipboard escape hatch were polish on top of a claim that was already defended.
 
 ---
 
@@ -813,7 +822,7 @@ export interface UseAutosaveOptions {
   enabled: boolean;
   debounceMs?: number;   // default 800
   maxWaitMs?: number;    // default 5000
-  /** called on 409 so the page can open ConflictDialog */
+  /** called on 409 so the page can flip the conflict banner on (§6.9) — no dialog */
   onConflict?: () => void;
 }
 
@@ -822,18 +831,37 @@ export interface UseAutosaveResult {
   lastSavedAt: Date | null;
   /** user-facing message for the `error` state */
   errorMessage: string | null;
-  /** merge a partial change into the pending patch; marks dirty and (re)arms the timer */
+  /** merge a partial change into the pending patch; marks dirty and (re)arms the timer.
+   *  If a PATCH is already in flight it only marks dirty — it never queues a second request. */
   queue: (patch: AutosavePatch) => void;
   /** cancel the timer and save now; resolves when the request settles */
   flush: () => Promise<void>;
   /** re-send the pending patch after an `error` */
   retry: () => Promise<void>;
-  /** adopt a freshly fetched document, clearing the conflict */
+  /** adopt a freshly fetched document, clearing the conflict (the `Reload` button, §6.9) */
   resolveConflict: (fresh: Pick<DocumentDetail, 'title' | 'content' | 'updatedAt'>) => void;
 }
 
 export function useAutosave(opts: UseAutosaveOptions): UseAutosaveResult;
 ```
+
+**The signature above is unchanged by `DECISIONS.md` D002 — what changed is what happens inside
+`queue()` while a request is in flight.** Two things were previously bundled in this hook and are
+now explicitly separate:
+
+| | Ships? | What it is | Cost |
+|---|---|---|---|
+| **The in-flight guard** | **Yes — not optional** | one boolean ref (`inFlightRef`) + one dirty flag. While a `PATCH` is in flight, no second `PATCH` starts. | ~5 lines |
+| **The request-merging queue** | **No — cut** | `queue()` folding a new patch into a *pending in-flight* one and awaiting its turn, so every keystroke burst got its own eventual request. | the expensive part |
+
+The guard is the entire mitigation for risk **R4** (`00-foundation.md` §9): without it a single
+user editing for two minutes 409s against themselves, and the 409 turns from a correctness feature
+into a bug. Cutting it while keeping the server's 409 is not an option.
+
+The queue is gone and is replaced by the simpler rule: **if a `PATCH` is in flight, skip — do not
+send, do not enqueue; just mark dirty. When the in-flight request completes, if the document is
+still dirty, re-fire exactly once** with the current pending patch. No backlog, no ordering
+problem, no unbounded chain of deferred writes.
 
 Wiring in `DocumentEditor`:
 
@@ -842,7 +870,7 @@ const autosave = useAutosave({
   documentId: doc.id,
   initialUpdatedAt: doc.updatedAt,
   enabled: canWrite,
-  onConflict: () => setConflictOpen(true),
+  onConflict: () => setConflictBanner(true),   // inline banner, §6.9 — not a dialog
 });
 
 const editor = useEditor({
@@ -879,9 +907,11 @@ Rules the implementer must not break:
    `00-foundation.md` §9).
 2. It is advanced **only** from a `200` response body or from an explicit conflict reload.
    Never from `Date.now()`, never optimistically.
-3. Requests are serialised: `queue()` during an in-flight `PATCH` merges into the pending patch
-   and waits; there is never more than one `PATCH` in flight per document. This is what keeps a
-   single user from 409-ing against themself.
+3. **At most one `PATCH` per document is in flight, ever.** `queue()` during an in-flight request
+   does not send and does not enqueue — it only marks the document dirty. When the request
+   settles, if the document is still dirty the hook re-fires **once**. This is what keeps a
+   single user from 409-ing against themself (R4), and it is a boolean ref plus a dirty flag —
+   about five lines. It is **not** the request-merging queue that D002 cut; see the table in §7.2.
 4. Title and content share **one** pending patch object and therefore one request.
 
 Route-change flush: there is no reliable global router-navigation hook in the App Router, so we
@@ -1007,11 +1037,11 @@ pnpm dlx shadcn@latest add button input label select dialog badge card separator
 | `input` | login email/password, editor title, import file input, share email combobox |
 | `label` | login fields, import dialog, share invite field |
 | `select` | toolbar block-type control, invite role select, per-collaborator role select |
-| `dialog` | Share dialog, Import dialog, Conflict dialog, Delete confirmation |
+| `dialog` | Share dialog, Import dialog, Delete confirmation (the 409 conflict is an inline banner, not a dialog — §6.9) |
 | `badge` | `RoleBadge` (Owner / Editor / Viewer) on shared cards |
 | `card` | dashboard document cards, login form panel, demo accounts panel |
 | `separator` | toolbar group dividers, dashboard section divider, share dialog sections |
-| `alert` | login error, read-only banner, error boundaries, import errors |
+| `alert` | login error, read-only banner, the amber conflict banner (§6.9), error boundaries, import errors |
 | `dropdown-menu` | header user menu (Sign out), card `⋯` menu (Delete) |
 | `skeleton` | `loading.tsx` for dashboard and editor, share-list loading |
 | `sonner` | toasts: document deleted, shared with X, role change failure, import failure |
@@ -1033,9 +1063,9 @@ primitives give for free.
 | **aria-labels** | Every icon-only control has one: the 8 toolbar buttons (§6.5), `Remove {name}`, `Document title`, `Document content` (on the ProseMirror surface via `editorProps.attributes`), `More options` on the `⋯` menus, `Close` (Radix default on `DialogClose`). Every icon inside a labelled button is `aria-hidden="true"`. |
 | **Toggle state** | Toolbar toggles expose `aria-pressed={active}`; the block-type `Select` exposes its value as text. Active state is never colour-only. |
 | **Focus-visible rings** | Global `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2` (shadcn's default) is kept on every interactive element. The whole-card `<Link>` on the dashboard gets `focus-visible:ring-2` on the card container so keyboard traversal of the grid is visible. Nothing sets `outline: none` without a replacement. |
-| **Dialog focus trap** | All three dialogs use Radix `Dialog`, which provides the focus trap, Escape-to-close, `aria-modal`, `aria-labelledby` from `DialogTitle`, background `inert`, and focus restoration to the trigger. Share dialog sets initial focus on the email input; the Conflict dialog sets it on `Reload latest`. The Import dialog blocks Escape only while an upload is in flight. |
+| **Dialog focus trap** | All three dialogs — Share, Import, and the delete confirm — use Radix `Dialog`, which provides the focus trap, Escape-to-close, `aria-modal`, `aria-labelledby` from `DialogTitle`, background `inert`, and focus restoration to the trigger. Share dialog sets initial focus on the email input. The Import dialog blocks Escape only while an upload is in flight. The conflict banner (§6.9) is **not** a dialog: it is inline, traps nothing, and never steals focus — its `Reload` button is simply the next tab stop in the top strip. |
 | **Live regions** | `SaveStatus` is `role="status" aria-live="polite"`, so save/conflict transitions are announced without stealing focus. Inline form errors use `role="alert"`. |
-| **Colour contrast** | Body and card text ≥ 4.5:1 against their background; `text-muted-foreground` is only used at ≥ 4.5:1 in the default shadcn light theme (verified once with a contrast checker on the three surfaces we tint: `bg-muted/40` cards, the read-only `Alert`, and the amber conflict status). The shared-card accent bar and role badge colours are **decoration** — the section heading, the byline and the badge word carry the meaning. |
+| **Colour contrast** | Body and card text ≥ 4.5:1 against their background; `text-muted-foreground` is only used at ≥ 4.5:1 in the default shadcn light theme (verified once with a contrast checker on the three surfaces we tint: `bg-muted/40` cards, the read-only `Alert`, and the amber conflict banner). The shared-card accent bar and role badge colours are **decoration** — the section heading, the byline and the badge word carry the meaning. |
 | **Semantics** | One `<h1>` per page (the document title / page title); sections use `<h2>`; the dashboard grids are `<ul>/<li>`; `<time dateTime>` for all timestamps. |
 | **Out of scope, stated** | No full screen-reader pass, no reduced-motion audit (we ship almost no motion), no mobile-touch target audit — desktop-first per `00-foundation.md` §4. |
 
@@ -1071,15 +1101,25 @@ canvas**. Time goes there; everything else takes the shadcn default and stops.
    ~15 lines, loses arrow-key styling. Saves ~20 min.
 2. Drop the `⋯` / Delete affordance from dashboard cards (the `DELETE` endpoint and its tests stay).
    Saves ~15 min.
-3. Drop `Copy my text` from the Conflict dialog. Saves ~10 min.
+
+There is no third lever left inside the conflict system. `DECISIONS.md` D002 already took it:
+the modal, `Copy my text` and the clipboard path do not exist to be cut, and what remains —
+the in-flight guard, the `conflict` state and the banner — is the mitigation for R4 plus the
+one sentence that makes "never silently" true. Do not cut into it.
 
 Nothing above the line — the two dashboard sections, the toolbar, autosave, the read-only banner
 and the share dialog — is cuttable; each maps to a numbered acceptance criterion in
 `00-foundation.md` §3.
 
-**Slice estimate: 3.5 h** — shell + header + login 0.5, dashboard + cards + empty states 0.6,
-editor page + toolbar + title 1.0, autosave hook + save status + conflict 0.6, share dialog 0.5,
-import dialog UI 0.2, a11y and polish pass 0.3.
+**Slice estimate: parts sum to 3.45 h → budgeted 3.25 h** (the figure `10-task-graph.md` §1 S2
+carries; the two descope levers above are what absorbs the difference) — shell + header + login 0.5,
+dashboard + cards + empty states 0.6, editor page + toolbar + title 1.0, autosave hook + save
+status + conflict banner 0.35, share dialog 0.5, import dialog UI 0.2, a11y and polish pass 0.3.
+
+The conflict line dropped from 0.6 to 0.35 (**−15 min**) under `DECISIONS.md` D002: the
+`ConflictDialog` component, its wireframe copy, the clipboard path and the request-merging queue
+are gone. What is left is the `conflict` state, the in-flight guard (~5 lines) and a one-sentence
+amber banner with one button.
 
 ---
 
@@ -1113,6 +1153,14 @@ import dialog UI 0.2, a11y and polish pass 0.3.
    export it, fall back to a `useState`-bumping `onTransaction` handler; same behaviour, one extra
    render per transaction. Verify in the first five minutes of T03, alongside the underline check —
    both are one `node -e` away and both are white-screen-class failures.
+8. ✅ **The 409 experience is an inline amber banner, not a modal** (`DECISIONS.md` **D002**, which
+   outranks this file). Ships: the `conflict` state, the suspended autosave, the un-advanced token,
+   the at-most-one-in-flight-`PATCH` guard, and one banner reading `This document changed
+   elsewhere.` with a single **Reload** button. Cut: `ConflictDialog.tsx`, **Copy my text** and the
+   clipboard path, and the request-**merging** queue in `useAutosave` (replaced by
+   skip-if-in-flight, re-fire once if still dirty). The in-flight guard is **not** part of that cut —
+   it is ~5 lines and the whole mitigation for R4. §§3, 6.6, 6.9, 7.2, 7.3, 9, 10 and 11 are
+   already written to this ruling.
 
 ---
 
@@ -1158,10 +1206,14 @@ import dialog UI 0.2, a11y and polish pass 0.3.
       run also produces a save (max-wait); blurring the canvas or the title saves immediately.
 - [ ] `lastKnownUpdatedAt` is held in a ref, advanced only from a `200` body or a conflict reload,
       and never more than one `PATCH` is in flight for a document — a single user editing for two
-      minutes straight produces zero 409s.
-- [ ] A simulated 409 (edit the same doc in two browsers) shows the conflict dialog, stops
-      autosave, offers **Copy my text** and **Reload latest**, and reloading restores a clean
-      `Saved` state where editing works again.
+      minutes straight produces zero 409s. An edit made while a `PATCH` is in flight is **skipped,
+      not queued**: it only marks the document dirty, and exactly one follow-up request fires when
+      the in-flight one settles.
+- [ ] A simulated 409 (edit the same doc in two browsers) shows the inline amber banner reading
+      **`This document changed elsewhere.`** in the editor's status area, stops autosave, and offers
+      a single **Reload** button; reloading re-fetches the document and restores a clean `Saved`
+      state where editing works again. No modal appears, there is no **Copy my text** button, and
+      `grep -rn "ConflictDialog\|clipboard" components/ hooks/` returns nothing.
 - [ ] A VIEWER sees the read-only banner naming the owner, no toolbar, no save status, no Share and
       no Delete, a static `<h1>` title, and a canvas whose text can be selected but not typed into.
 - [ ] An EDITOR sees the full toolbar and autosave but no Share and no Delete.

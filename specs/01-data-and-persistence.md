@@ -420,8 +420,13 @@ Two things make this safe rather than clever:
 - **Timestamp precision round-trips exactly.** Prisma maps `DateTime` to Postgres `timestamp(3)`,
   and `Date.prototype.toISOString()` emits milliseconds. So the ISO string the client received
   from the previous `PATCH` reconstructs to the identical `Date` — no truncation, no spurious
-  `409`. This is the mechanical half of the mitigation for risk **R4**; the client-side half
-  (advance the token on every successful save) is in the editor spec.
+  `409`. This is the mechanical half of the mitigation for risk **R4**; the client-side half is in
+  the editor spec (`04-ui-spec.md` §7.3) and is **two rules, both mandatory**: advance the token
+  **only** from a successful `PATCH` body, and keep **at most one `PATCH` in flight per document**
+  (skip-if-in-flight, re-fire once on completion if still dirty). `DECISIONS.md` **D002** keeps that
+  in-flight guard explicitly non-optional — it cut the request-*merging queue* around it, not the
+  guard. Shipping this conditional `UPDATE` without the guard turns a correctness feature into a bug:
+  a lone user editing for two minutes would `409` against themselves.
 
 `@updatedAt` is applied by the Prisma **client**, not by a database trigger. That is fine here
 because every write to `Document` goes through Prisma, but it means a manual `UPDATE` in `psql`

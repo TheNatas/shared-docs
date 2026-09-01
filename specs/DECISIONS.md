@@ -205,3 +205,65 @@ rather than assumed.
 
 `@tiptap/extensions@3.31.0` was added as a **direct** dependency: `Placeholder` lives there, and
 pnpm's strict `node_modules` does not expose transitive packages.
+
+## D008 — Amendment fallout: three corrections and one closed unknown.
+
+**Ruled 2026-09-01, after the D002/D003 amendment's verification pass.**
+
+### 1. D002 above misnames a section. The banner is `04-ui-spec.md` **§6.9**, not §11.
+
+D002's "Consequence for the specs" says "§11's `ConflictDialog` wireframe becomes a banner".
+Wrong: §11 is the visual polish budget and always was; the wireframe is **§6.9** and the
+component tree is **§3**. Two editors copied the bad number out of this file into
+`02-api-contract.md` and `10-task-graph.md` before the verifier caught it.
+
+This record is append-only, so D002's text stands as written and **this entry is the
+correction**. Anyone citing the banner cites §6.9.
+
+Worth naming the mechanism, because it will recur: a ruling that carries a wrong detail
+propagates it to every file that applies the ruling faithfully. Rulings are copied, not
+re-derived — that is the point of them — so a factual error in one is amplified rather than
+caught. Cite section *numbers* sparingly in future entries; cite section *names*.
+
+### 2. `useEditorState` is available. The last open human item is closed.
+
+`04-ui-spec.md` §12 item 7 and `10-task-graph.md` Appendix A row 55 were the only remaining ⏳.
+Checked directly against the installed package:
+
+```
+@tiptap/react@3.31.0 exports:
+  useCurrentEditor, useEditor, useEditorState, useReactNodeView, useTiptap, useTiptapState
+```
+
+`useEditorState` ships. The toolbar uses it for active-state derivation as specced. The
+`onTransaction` + `useState`-bump fallback is **not** needed and must not be built — it re-renders
+the whole toolbar on every transaction, which is the cost `useEditorState` exists to avoid.
+
+**The open-decisions list is now empty.** Nothing in the spec set is waiting on a human.
+
+### 3. `_review-coverage.md` and `_review-consistency.md` stay stale. Confirmed.
+
+Both still describe `ConflictDialog` and "Copy my text" as shipping. They are **dated adversarial
+findings from before the rulings**, not specifications, and the same logic that protects
+`_toolchain-findings.md` protects them: editing an evidence file so it agrees with a later
+decision destroys its value as evidence. Their filenames start with `_` for exactly this reason.
+No implementer builds from them.
+
+### 4. Applying D005/D006/D007 to the spec set is deferred, and the lead owns it.
+
+The verifier correctly declined to apply these — the repo moved underneath it mid-audit (W0
+landed and this file grew by two entries while it was reading), and editing files that a
+concurrent wave might also touch is how two vocabularies get created.
+
+Still stale in the specs, to be reconciled **after W1 completes**:
+
+| Where | What is stale | Ruling |
+|---|---|---|
+| `10-task-graph.md` §2 chokepoint table | `docker-compose.test.yml` row still owned by T04/W1 | D005 — split the row; compose + initdb are T01/W0 |
+| `10-task-graph.md` T04 DoD | requires `prisma.config.ts`, warns about the Prisma 7 seed key | D006 — void; `package.json#prisma.seed` is correct and already present |
+| `10-task-graph.md` T03 DoD, R1 row, §7 item 7 | R1 open, spike starts on Plan B, `.docx` cuttable | D007 — R1 closed on Plan A; `.docx` is no longer at risk |
+| `01`, `07` — Prisma version references | assume the 7.10.0 pin | D006 — 6.19.3; datasource `url`/`directUrl` are correct as written |
+
+**This staleness is currently harmless**: W1's three agents were each given the overrides
+directly in their briefs, so no agent is building from a stale line. It stops being harmless at
+W3, so it is reconciled before W3 starts.

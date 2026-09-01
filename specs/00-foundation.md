@@ -4,6 +4,13 @@
 > slice of this document and must not contradict it. If an expansion needs to deviate,
 > it changes this file first.
 
+> **Except where `specs/DECISIONS.md` says otherwise.** `DECISIONS.md` is the ruling record:
+> it holds decisions taken *after* this document was written, and it **outranks this file
+> wherever the two conflict**. Read it before implementing anything from here. In force
+> today: **D001** (3–4 agents, no up-front cuts), **D002** (optimistic concurrency ships in
+> its reduced form), **D003** (Neon AWS `us-east-1` paired with Vercel `iad1`), **D004**
+> (public repo, spec set committed before the code).
+
 Status: **approved decisions, pre-implementation**
 Owner: Natanael Alves Gabriel (@TheNatas)
 Date: 2026-09-01
@@ -37,9 +44,9 @@ not building and why.
 | Sharing | **Owner + per-user share rows with `VIEWER` / `EDITOR` roles** | Satisfies the core requirement and absorbs the chosen stretch. |
 | Stretch | **Role-based permissions (viewer vs editor)** | Deepens the graded requirement instead of bolting on a side feature. Enforced on **both** server and client. |
 | Tests | **Vitest** — permission unit tests + API integration tests | Targets the access-control surface, which is what reviewers actually probe. |
-| Deploy | **Vercel** (app) + **Neon** (DB) | Both accounts already exist. |
+| Deploy | **Vercel** (app, function region **`iad1`**) + **Neon** (DB, AWS **`us-east-1`**) | Both accounts already exist. The region pair is fixed by **D003**: Neon's region cannot be changed after project creation, reviewers are US-based, and the function must be co-located with the database. |
 | Docs language | **English** | The brief and reviewers are English. |
-| Repo | `~/Documents/natas/shared-docs` → `github.com/TheNatas/shared-docs`, **public** | Nested inside the `natas` repo; never `git add` it from the parent. |
+| Repo | `~/Documents/natas/shared-docs` → `github.com/TheNatas/shared-docs`, **public** | Nested inside the `natas` repo; never `git add` it from the parent. **D004**: the spec set is commit 1 and the implementation starts at commit 2, so the history shows the plan predating the build. The remote is **HTTPS, not SSH** — the snap-confined `gh` cannot `exec ssh`, so pushes go through `credential.helper = !gh auth git-credential`. |
 | Time budget | **~8 hours of focused work** | Drives every cut in §4. |
 
 ## 2a. Pinned versions (canonical — overrides every other spec)
@@ -114,12 +121,14 @@ Each maps to a line in `specs/BRIEF.md`. Nothing ships until all of these are tr
 
 **Two shipped behaviours are not brief lines.** They are specced in depth, they appear in the video
 script and the smoke test, and they must therefore be traceable — but they are *not* acceptance
-criteria, and they are the first two entries on the cut list in `10-task-graph.md` §7:
+criteria, and both are on the cut list in `10-task-graph.md` §7 — C22 as item 1, C21 as items 3
+and 11. **D002 has since resolved C22's entry: it is not taken — the conflict system ships,
+reduced.**
 
 | # | Behaviour | Status |
 |---|---|---|
 | C21 | Delete a document (owner only) | **cuttable.** No brief line asks for it. The endpoint and its `403`-for-EDITOR test are cheap; the UI affordance is the part that goes first. |
-| C22 | A concurrent edit produces a visible conflict, never silent data loss | **cuttable.** The *argument* — we did not build real-time collab and here is what happens instead — is worth one paragraph in `ARCHITECTURE.md` and one sentence in the video, both of which are being written anyway. The `409` machinery (§7) is worth ~1h15 across five specs and is the largest single block of work in the set that maps to no brief line. If the clock is behind at hour 3, cut the machinery and keep the paragraph. |
+| C22 | A concurrent edit produces a visible conflict, never silent data loss | **ships, reduced — see D002.** The full `409` machinery (§7) was priced at ~1h15 across five specs, the largest single block in the set that maps to no brief line. D002 declines to delete it and ships it at ~30 minutes instead: the `409`, the single-in-flight guard, a `conflict` save state, and an inline reload banner. What goes is the recovery polish — the conflict *dialog*, "Copy my text", the request-merging queue, the second integration case. The *argument* — we did not build real-time collab and here is what happens instead — still gets one paragraph in `ARCHITECTURE.md` and one sentence in the video, both of which are being written anyway. |
 
 ## 4. Explicit non-goals (say these out loud in the video and ARCHITECTURE.md)
 
@@ -127,8 +136,10 @@ Cutting well *is* the graded skill. We are **not** building:
 
 - **Real-time collaborative editing (OT/CRDT).** Correct multiplayer editing is days of
   work. Instead we ship a cheap, honest guard: optimistic concurrency (§7) so a
-  second writer gets a clear "this changed elsewhere" conflict rather than silent
-  data loss. Stating the limit and handling it beats pretending it doesn't exist.
+  second writer gets a `409` and a clear inline banner — `This document changed
+  elsewhere.` with a **Reload** button — rather than silent data loss. Per **D002** that
+  banner is the whole recovery surface: no conflict dialog, no merge, no "copy my text".
+  Stating the limit and handling it beats pretending it doesn't exist.
 - **Public link sharing / anonymous access.** Sharing is user-to-user only.
 - **Comments, suggestions, presence cursors.**
 - **Tables, images, code blocks, text colour, fonts.** The brief asks for basic
@@ -348,10 +359,13 @@ validates its body with **Zod**. Errors use one envelope:
 | `GET` | `/api/health` | public | `{ok, db, users}` — a row count, no PII. It is the hour-2 deploy checkpoint (§9/R2) and it stays in the final product. |
 
 **Optimistic concurrency.** `PATCH /api/documents/:id` requires `lastKnownUpdatedAt`.
-If it does not match the row's `updatedAt`, respond `409 CONFLICT` and let the client
-offer a reload. The response of every successful `PATCH` returns the new `updatedAt`
-so the client can advance its token. This is our honest answer to "no real-time
-collab": last-write-wins, but never *silently*.
+If it does not match the row's `updatedAt`, respond `409 CONFLICT`. The client then enters
+a `conflict` state, suspends autosave, and shows an inline banner whose only action is
+**Reload** — that is the entire recovery UI (**D002**): no dialog, no merge, no clipboard
+path. The response of every successful `PATCH` returns the new `updatedAt`, and the client
+advances its token **only** from a success body. The client also keeps at most one `PATCH`
+in flight per document (§9/R4). This is our honest answer to "no real-time collab":
+last-write-wins, but never *silently*.
 
 **`GET /api/users` is a known simplification** — it exposes a 3-account demo directory.
 Documented in `ARCHITECTURE.md` as a deliberate trade, with the real fix (invite by
@@ -436,11 +450,11 @@ Edge middleware protects `/documents/*` and redirects unauthenticated users to `
 | id | Risk | Mitigation |
 |---|---|---|
 | **R1** | `@tiptap/html`'s `generateJSON` needs a DOM; behavior on Node/serverless is the one genuinely uncertain integration. | **Spike it in the first 30 minutes.** Fallback: parse to HTML then map to ProseMirror JSON via `jsdom`, or bypass HTML entirely and build PM JSON from the Markdown AST. Do not start the import UI before this is settled. |
-| **R2** | Prisma on Vercel needs `prisma generate` at build and a pooled Neon URL at runtime. | `postinstall: prisma generate` **and** `"build": "prisma generate && next build"` — belt and braces, because a cached `node_modules` skips `postinstall`. Datasource declares both `url` (pooled, `pgbouncer=true&connection_limit=1`) and `directUrl` (unpooled, migrations only). Deploy a hello-world slice **early**, not at hour 7. |
+| **R2** | Prisma on Vercel needs `prisma generate` at build and a pooled Neon URL at runtime. | `postinstall: prisma generate` **and** `"build": "prisma generate && next build"` — belt and braces, because a cached `node_modules` skips `postinstall`. Datasource declares both `url` (pooled, `pgbouncer=true&connection_limit=1`) and `directUrl` (unpooled, migrations only). Set the Vercel function region to **`iad1`** to match Neon's **`us-east-1`** (**D003**) — a mismatched pair adds a cross-region round trip to every query. Deploy a hello-world slice **early**, not at hour 7. |
 | **R2b** | **Vercel Deployment Protection** puts an SSO wall in front of production. It looks perfectly healthy to the owner, who is logged in, and zeroes C14 for the reviewer. | Settings → Deployment Protection → **disabled for Production**, verified from a **logged-out incognito window at the hour-2 deploy**, not at hour 7:50. Two minutes; the highest-consequence item in the runbook. |
 | **R3** | Integration tests need a real Postgres. | One file, `docker-compose.test.yml`, on host port **55432**, user/password `test`, tmpfs data dir, databases `shared_docs_test` (tests) and `shared_docs_dev` (local dev, created by an initdb script). `pnpm test:unit` must stay dependency-free so reviewers can always run *something*. |
-| **R4** | Autosave + optimistic concurrency can 409 spuriously against yourself. | Client stores the `updatedAt` returned by each successful `PATCH` in a **ref**, and keeps at most one `PATCH` in flight per document; only a *different* session can trigger a conflict. Cover with a test. |
-| **R5** | **Time. The nine slice budgets sum to ~16 agent-hours against 8 wall-clock hours.** That is not a rounding error. | Two levers, and both must be pulled. **(a) Parallelism.** `10-task-graph.md` runs waves W1/W3/W4/W6 two-to-four agents wide; mean parallelism required is ~2.1×. **If you are working solo with no delegation, this plan does not fit and you start taking cuts from `10-task-graph.md` §7 at hour 3, not hour 6.** **(b) An honest schedule.** Deploy at hour 2, **freeze features at 5:30**, and reserve **2.5 h** for docs + video + submission — measured at 2h15 (docs) + 1h45 (video/Drive) against the old 2 h reserve, which never fit. The last block is not compressible: four of the brief's deliverables and a graded video live in it. |
+| **R4** | Autosave + optimistic concurrency can 409 spuriously against yourself. | Client stores the `updatedAt` returned by each successful `PATCH` in a **ref**, and keeps at most one `PATCH` in flight per document; only a *different* session can trigger a conflict. Cover with a test. **This guard is explicitly preserved by D002 — it is not optional and is on no cut list**, because cutting it while keeping the `409` turns a correctness feature into a bug. (D002 drops the request-*merging queue*, which is a separate thing: skip-if-in-flight, then re-fire once on completion if still dirty.) |
+| **R5** | **Time. The nine slice budgets sum to ~15.5 agent-hours — ~15.75 before D002 took 0.25 h out of `04` — against 8 wall-clock hours.** That is not a rounding error. (D002 saves ~45 minutes of conflict-system work in total; only the `04` quarter-hour lands in the slice budgets, the rest sits in `10-task-graph.md`'s task estimates, the dropped recovery test and the folded video beat. The authoritative itemisation is `10-task-graph.md` §1 S2.) | Two levers, and both must be pulled. **(a) Parallelism.** `10-task-graph.md` runs waves W1/W3/W4/W6 **three-to-four** agents wide — fixed by **D001**; mean parallelism required is ~2.1×. **If you are working solo with no delegation, this plan does not fit and you start taking cuts from `10-task-graph.md` §7 at hour 3, not hour 6.** **(b) An honest schedule.** Deploy at hour 2, **freeze features at 5:30**, and reserve **2.5 h** for docs + video + submission — measured at 2h15 (docs) + 1h45 (video/Drive) against the old 2 h reserve, which never fit. The last block is not compressible: four of the brief's deliverables and a graded video live in it. |
 
 ## 10. Deliverables map
 

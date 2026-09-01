@@ -19,7 +19,7 @@ disagree about *content*, the sibling wins and this file is edited.
 | # | Constraint | Consequence |
 |---|---|---|
 | **S1** | **Total budget is ~8 hours of wall clock.** | Every wave below carries a clock window, not just an estimate. Windows are the contract; estimates are the input. |
-| **S2** | **The sum of the slice budgets is ~16 agent-hours** (01: 1.25 · 02: 2.0 · 03: 1.0 · 04: 3.5 · 05: 2.0 · 06: 1.5 · 07: 0.5 · 08: 2.25 · 09: 1.75). | **8 hours of wall clock only exists if waves W1, W3, W4 and W6 run 2–4 agents wide.** Mean parallelism required: **2.1×**. If you are one pair of hands with no delegation, this plan does not fit and you start pulling from §7's cut list at **hour 3**, not hour 6. Say this out loud before you start. |
+| **S2** | **The sum of the slice budgets is ~15.5 agent-hours** (01: 1.25 · 02: 2.0 · 03: 1.0 · 04: 3.25 · 05: 2.0 · 06: 1.5 · 07: 0.5 · 08: 2.25 · 09: 1.75) — `04` lost 0.25 h when `DECISIONS.md` **D002** reduced the conflict system. | **8 hours of wall clock only exists if waves W1, W3, W4 and W6 run 3–4 agents wide** — which is exactly what **D001 decides**: the build runs 3–4 wide, the ~2.1× mean parallelism the 8-hour clock requires. If that ever collapses to one pair of hands with no delegation, this plan does not fit and you start pulling from §7's cut list at **hour 3**, not hour 6 — but that is the contingency, not the plan. Say this out loud before you start. |
 | **S3** | **Deploy a trivial slice to production at ~hour 2** (`00-foundation.md` R2, `07-deployment-runbook.md` §0). | T08 is a **gate**, not a task you get to reschedule. It answers four yes/no questions (build green · `prisma generate` ran · function reached Neon over the *pooled* URL · migration landed). Everything in R2 fails at deploy time only, so a deploy at hour 7 is an unknown-unknown with no runway behind it. |
 | **S4** | **The R1 import spike is a 30-minute hard time-box, and it happens FIRST** (`05-import-spec.md` §5.1). | T03 starts the moment `pnpm add` finishes. At T+30 you pick Plan A, B or C from `05-import-spec.md` §5.5 and move on. You do not extend the box. `_toolchain-findings.md` TRAP-3 already confirmed `@tiptap/html@3` ships no DOM, so **start on Plan B (jsdom), not Plan A.** No import UI, no import route, no editor toolbar work begins before this is settled — the spike also freezes `lib/editor-extensions.ts`, which two later tasks import. |
 | **S5** | **Feature freeze at hour 5:30.** | Moved from 6:00: `08-docs-plan.md` measures 2 h 15 and `09-video-and-submission.md` measures 1 h 45, i.e. **4 h of post-freeze work against the old 2 h reserve** (`00-foundation.md` §9/R5, now rewritten). At 5:30, whatever is merged is the product. A task not merged at 5:30 is cut per §7 and written into `SUBMISSION.md` under "what is incomplete" — it is not finished at 5:50. After the freeze a deploy that fails the smoke test is **rolled back, not debugged** (`07-deployment-runbook.md` §0). |
@@ -36,8 +36,11 @@ disagree about *content*, the sibling wins and this file is edited.
 | 2:30–4:00 | **W3** Backend surface | all nine route handlers + the import pipeline | 3–4 |
 | 3:15–4:45 | **W4** Frontend surface | login, dashboard, editor, autosave, share dialog | 3 |
 | 4:45–5:30 | **W5** Verification + **FREEZE** | integration suite, manual QA on the deployed build, DEPLOY #2 | 2 |
-| 5:30–7:00 | **W6** Docs | README, ARCHITECTURE, AI-WORKFLOW, clean-clone run, screenshots | 2–3 |
+| 5:30–7:00 | **W6** Docs | README, ARCHITECTURE, AI-WORKFLOW, clean-clone run, screenshots | 3 |
 | 7:00–8:00 | **W7** Submission | SUBMISSION.md, video (≤2 takes), zip, Drive, logged-out verification | 1 (lead) |
+
+The **Agents** column is a ruling, not an aspiration: `DECISIONS.md` **D001** fixes the build at
+**3–4 agents wide** through W1, W3, W4 and W6. Staff it that way or the 8-hour clock is fiction.
 
 W3 and W4 deliberately overlap from 3:15. Nothing in W4 depends on a *route body* — it depends on
 the **contract** T07 pins. A client that calls an endpoint another agent is still writing is fine;
@@ -57,7 +60,7 @@ of them stops and asks the lead.
 | `package.json`, `pnpm-lock.yaml` | **T01** | W0 | everyone. **No agent runs `pnpm add`.** Every dependency in the spec set is installed once, in T01, at the pins in `_toolchain-findings.md`. A later need goes to the lead. |
 | `prisma/schema.prisma`, `prisma/migrations/**` | **T01** | W0 | T04, T07, T20. The schema is canonical and closed in `00-foundation.md` §5 — there is nothing to discover, so it is a copy-paste that unblocks everything. Target: **exactly one migration, `init`.** |
 | `lib/db.ts` (the Prisma singleton) | **T01** | W0 | every server module. Must stay unreachable from `middleware.ts` (Edge). |
-| `specs/DECISIONS.md` | **T02** | W0 | everyone. The reconciliation record (Appendix A). |
+| `specs/DECISIONS.md` | **T02 — the lead, alone** | W0 | everyone. **Append-only**, and it **outranks every spec file, this one included**. It already carries **D001–D004**; T02 adds the reconciliation record (Appendix A) beneath them. No delegated agent writes here — an implementer who hits a contradiction escalates (R6) and the lead appends the numbered ruling. |
 | `lib/editor-extensions.ts` | **T03** | W0 | T12 (importer), T17 (editor). **The single most dangerous file in the repo** — if the importer and the editor build their schemas from different lists, imported documents white-screen the editor at mount with a `RangeError` that points at TipTap, not at the import code (`05-import-spec.md` §3.3). One file, two consumers, frozen by the spike. |
 | `app/globals.css`, `app/layout.tsx`, `components/ui/**` (shadcn) | **T06** | W1 | T14–T19. Tailwind v4 entry, theme tokens, and the `.prose-doc` block. Six UI tasks each adding a rule to one stylesheet is the classic four-way conflict. |
 | `lib/permissions.ts`, `lib/session-token.ts`, `middleware.ts` | **T05** | W1 | T07, T09–T13. One resolver, no route re-derives permissions inline (`00-foundation.md` §6 rule 2). |
@@ -98,8 +101,12 @@ Nothing here is delegable. It is all decisions, and there is no code yet to divi
   `.gitignore` · `.gitattributes` · `.env` · `.env.example` · `prisma/schema.prisma` ·
   `prisma/migrations/<ts>_init/migration.sql` · `lib/db.ts` · `app/layout.tsx` (bare) ·
   `app/page.tsx` (redirect) · `app/api/health/route.ts` · `README.md` (heading skeleton
-  only) · `docs/ai-log.md` (header). Also: `git init -b main`, `gh repo create TheNatas/shared-docs
-  --public --source=. --push`, and `echo "shared-docs/" >> ../.gitignore`.
+  only) · `docs/ai-log.md` (header). **The repository already exists and is pushed** —
+  `github.com/TheNatas/shared-docs`, **public**, with the spec set as **commit 1**
+  (`DECISIONS.md` D004). T01 therefore runs **no `git init` and no `gh repo create`**: it commits
+  the scaffold as **commit 2** on `main` and pushes over **HTTPS**
+  (`credential.helper = !gh auth git-credential`, already set in this repo's local config — the
+  snap-confined `gh` cannot `exec ssh`). Also: `echo "shared-docs/" >> ../.gitignore`.
 - **Deps:** none · **Est: 0.7h**
 - **DoD:**
   - `pnpm build` and `pnpm exec tsc --noEmit` are green on a clean `pnpm install`.
@@ -116,14 +123,18 @@ Nothing here is delegable. It is all decisions, and there is no code yet to divi
     `(documentId, userId)` unique constraint; the migration is committed
     (`git ls-files prisma/migrations` is non-empty).
   - `GET /api/health` returns `{ok:true,db:"up",users:0}` locally.
+  - The scaffold is pushed to `origin/main` as **commit 2**; `git log --oneline` shows the spec-set
+    commit beneath it, so the history proves the specification predated the build (D004).
   - `git ls-files | grep -E '^\.env$'` is empty.
 
 #### T02 — `specs/DECISIONS.md` — the cross-spec reconciliation record
 - **Creates:** `specs/DECISIONS.md`
 - **Deps:** none (may be written in parallel with T01 — disjoint files — but it is the same
   head's judgement) · **Est: 0.3h**
-- **DoD:** every row of **Appendix A** below has a one-line ruling with a named winning spec, and
-  the file states the arbitration rule (`00-foundation.md` > the owning spec > this file). The
+- **DoD:** **D001–D004 are already appended and are canonical** — T02 does not re-open them, it
+  writes the reconciliation record beneath them. Every row of **Appendix A** below has a one-line
+  ruling with a named winning spec, and the file states the arbitration rule (**`DECISIONS.md` >
+  `00-foundation.md` > the owning spec** — an appended ruling outranks every spec file). The
   four highest-blast-radius rulings — the `ApiErrorCode` union, the `Capability` vocabulary, the
   Zod major, and the module map — are written as copy-pasteable declarations an agent can
   paste into a file without re-deriving them. **This is the highest-leverage 20 minutes in the
@@ -263,6 +274,9 @@ All three touch disjoint trees: `prisma/` + test infra, `lib/auth` + `lib/permis
 - **Modifies:** `live-url.txt` · Vercel project settings · Neon project. No app code.
 - **Deps:** T01, T04 · **Est: 0.5h**
 - **DoD:** all four hour-2 questions green (`07-deployment-runbook.md` §0):
+  - the Neon project was created in **AWS `us-east-1`** and the Vercel **function region is `iad1`**
+    (`DECISIONS.md` D003 — decided, not a judgement call at the console). The region is fixed at
+    project creation on the free tier: getting it wrong means deleting and re-creating the project;
   - the Vercel build succeeds with pnpm; no `Module not found: @prisma/client`;
   - `curl https://<app>.vercel.app/api/health` returns `{"ok":true,"db":"up","users":3}`;
   - `prisma migrate status` against Neon reports "up to date"; the seed was run against
@@ -292,14 +306,20 @@ Five route files, five owners, zero overlap. Every one of them is `withSession` 
 
 #### T10 — `GET`/`PATCH`/`DELETE /api/documents/[id]`
 - **Creates:** `app/api/documents/[id]/route.ts` · `lib/documents/update.ts`
-- **Deps:** T07 · **Est: 0.5h**
+- **Deps:** T07 · **Est: 0.5h** — **unchanged by `DECISIONS.md` D002**, which keeps the server half
+  of the conflict system in full. Not one minute of D002's ~45 comes out of this task: **T18** drops
+  0.7h → 0.5h, and the rest sits in the dropped recovery test (`06`), the docs paragraph (`08`) and
+  the folded video beat (`09`).
 - **DoD:** `GET` returns `DocumentDetail` with `shares` populated for OWNER and null otherwise.
-  `PATCH` requires `lastKnownUpdatedAt` on **every** call including rename-only; the write is a
-  **single conditional `updateMany` keyed on `updatedAt`** (never read-then-write); a stale token
+  `PATCH` requires `lastKnownUpdatedAt` on **every** call including rename-only, Zod-validated as an
+  **ISO datetime string**; the write is a **single conditional `updateMany` keyed on `updatedAt`**
+  (never read-then-write); a stale token
   yields `409 CONFLICT` with `details.currentUpdatedAt` and `details.lastKnownUpdatedAt`; every
   `200` returns a `updatedAt` strictly greater than the one sent; a body over 1 MB is
   `413 CONTENT_TOO_LARGE`, not `400`. `DELETE` as EDITOR is `403`; as a no-access user, `404`.
-  Timestamp comparison is **Date-instant equality, never string equality**.
+  Timestamp comparison is **Date-instant equality, never string equality**. Every one of these lines
+  is in D002's *ships* column — nothing here is cut, and none of it may be "simplified" into a plain
+  `update` on the strength of §7 item 1.
 
 #### T11 — Share routes + user directory
 - **Creates:** `app/api/documents/[id]/shares/route.ts` ·
@@ -394,19 +414,26 @@ directory. All six consume the contract, none consumes another's files.
   canvas whose text selects but does not type. An EDITOR sees the toolbar but no Share and no
   Delete. `notFound()` renders the not-found copy, not a permission message.
 
-#### T18 — Autosave, save status, conflict recovery
+#### T18 — Autosave, save status, conflict banner
 - **Creates:** `hooks/useAutosave.ts` · `hooks/useDebouncedCallback.ts` ·
-  `components/editor/SaveStatus.tsx` · `components/editor/ConflictDialog.tsx`
-- **Deps:** T07 (signature pinned by `04-ui-spec.md` §7.2) · **Est: 0.7h**
+  `components/editor/SaveStatus.tsx` (the path is named in `04-ui-spec.md` §3; it also renders the
+  inline conflict banner specified in `04-ui-spec.md` §6.9). **No
+  `components/editor/ConflictDialog.tsx`** — `DECISIONS.md` D002 replaced the modal with the banner.
+- **Deps:** T07 (signature pinned by `04-ui-spec.md` §7.2) · **Est: 0.5h** (was 0.7h; D002 removed
+  the merging queue, the modal and the clipboard path)
 - **DoD:** every state in §6.6 with the exact copy given, in an `aria-live="polite"` region.
   Debounce 800 ms, max-wait 5000 ms, immediate `flush()` on blur. `lastKnownUpdatedAt` lives in a
   **`useRef`, never `useState`**, is advanced **only** from a `200` body or a conflict reload,
-  never from `Date.now()`. **At most one `PATCH` in flight per document** — a queued edit merges
-  into the pending patch. A single user editing for two minutes straight produces **zero 409s**
-  (this is R4, and the fix is client serialisation, not loosening the server check). A `409`
-  suspends autosave, opens the dialog, and offers **Copy my text** and **Reload latest**; reload
-  restores a clean `Saved` state where editing works again. `403` on save sets the editor
-  non-editable and says "You no longer have edit access."
+  never from `Date.now()`. **At most one `PATCH` in flight per document** — this guard is **not
+  optional** (D002): it is a boolean ref plus a dirty flag, it is the whole R4 mitigation, and
+  cutting it while keeping the `409` turns a correctness feature into a bug. It is
+  **skip-if-in-flight, then re-fire once on completion if still dirty** — *not* the request-merging
+  queue, which D002 cut. A single user editing for two minutes straight produces **zero 409s**
+  (this is R4, and the fix is client serialisation, not loosening the server check). A `409` enters
+  a `conflict` state that **suspends autosave** and renders an inline **amber banner** —
+  `This document changed elsewhere.` plus a **Reload** button, and **no other action**: there is no
+  modal, no **Copy my text**, no clipboard path. Reload restores a clean `Saved` state where editing
+  works again. `403` on save sets the editor non-editable and says "You no longer have edit access."
 
 #### T19 — Share dialog
 - **Creates:** `components/share/ShareDialog.tsx` · `ShareInviteForm.tsx` ·
@@ -452,7 +479,7 @@ directory. All six consume the contract, none consumes another's files.
 
 ---
 
-### W6 — Documentation · 5:30–7:00 · **2–3 agents**
+### W6 — Documentation · 5:30–7:00 · **3 agents**
 
 Three of the four documents are *derivative* — `ARCHITECTURE.md` is a rewrite of foundation §§2/4/6/7
 for an external reader, `SUBMISSION.md` is §10 plus links, `AI-WORKFLOW.md` is a distillation of
@@ -722,7 +749,7 @@ task each (C17, C19) — they are also the two that cannot be cut, which is cons
 | **W3** | **Yes — 3–4 agents** | Five route files, five owners. The natural lanes: **A** = documents (T09 + T10), **B** = shares + users (T11), **C** = import (T12, the biggest single task), **D** = auth routes (T13, ~20 min — fold into A or B if you only have three). |
 | **W4** | **Yes — 3 agents** | **A** = login + dashboard + buttons (T14, T15, T16) · **B** = editor + toolbar (T17) · **C** = autosave + conflict (T18) then share dialog (T19). B and C both feed `DocumentEditor.tsx`, but only B writes it. |
 | **W5** | **Partly — 2** | T20 is an agent; T21 is the lead with two browsers open. |
-| **W6** | **Yes — 2–3 agents** | T22/T23/T24 are three independent files. T25 and T26 are human. |
+| **W6** | **Yes — 3 agents** (D001) | T22/T23/T24 are three independent files. T25 and T26 are human. |
 | **W7** | **No — lead only** | Recording, uploading, Drive permissions, and the logged-out verification. None of it is delegable and none of it is compressible. |
 
 ### 6.2 What each agent needs handed to it
@@ -769,22 +796,34 @@ upload (C8), sharing with an owner and a visible owned/shared distinction (C9–
 (C12), and engineering quality — setup instructions, a working deployment, validation, ≥1
 meaningful test, an architecture note (C13–C17).
 
-**How far down to start.** The cut list is ordered by *cost per unit of grade risk*, and where you
-enter it depends on how wide you are running:
+**How far down to start — decided.** The cut list is ordered by *cost per unit of grade risk*, and
+where you enter it used to depend on how wide you were running. It no longer does: `DECISIONS.md`
+**D001** rules the build at **3–4 agents wide**, and therefore that **no cuts are taken up front.**
+The first row below is the plan of record; the other two are contingencies, kept because the
+trigger can still fire.
 
 | Situation | Start at |
 |---|---|
-| 3–4 agents through W1/W3/W4, on schedule at 2:00 | cut nothing yet; pull from the top only when a wave slips |
+| **3–4 agents through W1/W3/W4/W6 — the D001 plan of record** | **Cut nothing.** Enter the list from the top only when a wave has actually slipped. |
 | 2 agents, or behind at 3:00 | take **1–6** immediately, before the wave that would build them |
-| **Solo, no delegation** | take **1–9 up front.** The stated slices sum to ~16 agent-hours (S2); solo, the plan does not fit and pretending otherwise means discovering it at hour 6 with the video unrecorded. |
+| **Solo, no delegation** | take **1–9 up front.** The stated slices sum to ~15.5 agent-hours (S2); solo, the plan does not fit and pretending otherwise means discovering it at hour 6 with the video unrecorded. |
 
-Items 1–9 remove **≈4 h 25** and **not one of them touches a brief line or a C1–C20 row.**
-The whole list, taken end to end, is ≈6 h — which is what closes the gap between a 16-agent-hour
-plan and an 8-hour day when the parallelism in S2 is not available.
+**The trigger that moves you off row 1** is R5's, and D001 names it: **clock reaches 3:00 with W3
+not underway, or 5:30 with any W3/W4 task unmerged.** At that point R5 has fired — freeze and cut
+from the top, do not extend. Nothing else reopens the question; "this feels tight" is not the
+trigger. The one scope reduction already taken is **D002**, which is a scope decision made on the
+merits, not a schedule cut, and it has already spent the expensive half of item 1.
+
+Items 1–9 now remove **≈3 h 40** (item 1 dropped from 1 h 15 to 30 min under D002) and **not one of
+them touches a brief line or a C1–C20 row.** The whole list, taken end to end, is **≈5 h 50** — the
+sum of every row's *Saves* column with item 12 at zero, since D002 already removed what item 12
+used to cut; take item 3 and item 11 falls away as redundant too, leaving **≈5 h 35**. That is what
+would close the gap between a 15.5-agent-hour plan and an 8-hour day if the parallelism in S2 were
+not available — and under D001 it is.
 
 | # | Cut | Saves | Last defensible state |
 |---:|---|---:|---|
-| 1 | **The optimistic-concurrency / `409` system** (T10 server, T18 client): `lastKnownUpdatedAt`, the conditional `updateMany`, `ConflictDetails`, the client token ref and serialised in-flight `PATCH`, the `conflict` state, `ConflictDialog`, "Copy my text", integration case 6, the video's 3:00 beat | **1 h 15** | The largest single block of work in the set that maps to **no brief line and no acceptance criterion** — it is C22, which `00-foundation.md` §3 marks cuttable for exactly this reason. `PATCH` becomes a plain `update`; last write wins. **The argument survives intact and costs nothing:** one paragraph in `ARCHITECTURE.md` §4 ("we did not build real-time collaboration; here is the failure mode; here is what I would build") and one sentence in the video — both of which are being written anyway. The brief grades the *reasoning*, and the reasoning is free. Note this is the one cut that has to be taken **before** T10 and T18 start, not after. |
+| 1 | **What is left of the optimistic-concurrency / `409` system** (T10 server, T18 client): `lastKnownUpdatedAt` and its ISO validation, the conditional `updateMany`, the `409` + `ConflictDetails`, the client token ref and the single-in-flight guard, the `conflict` state, the inline banner, integration case 6, the video sentence | **30 min** | **Read `DECISIONS.md` D002 before touching this row.** The expensive half — the modal, "Copy my text", the request-merging queue, the recovery test, the dedicated video beat — **has already been cut**, which is why this saves 30 minutes and not the 1 h 15 it was originally worth. What remains is the whole of the claim *"last write wins, but never silently"*, and it is C22, which `00-foundation.md` §3 marks cuttable. If it goes: `PATCH` becomes a plain `update`, last write wins silently, and **the single-in-flight guard goes with it** — keeping the guard without the `409` is harmless, keeping the `409` without the guard is a bug (R4). **The argument survives intact and costs nothing:** one paragraph in `ARCHITECTURE.md` §4 ("we did not build real-time collaboration; here is the failure mode; here is what I would build") and one sentence in the video — both of which are being written anyway. The brief grades the *reasoning*, and the reasoning is free. Note this is the one cut that has to be taken **before** T10 and T18 start, not after. |
 | 2 | **`GET /api/users` + `UserAutocomplete`** (T11, T19): share by typed email only | **35 min** + ~10 min of prose | "A way to grant another user access" is satisfied by a plain email input. Cutting the endpoint also deletes the user-enumeration trade-off it forces into `ARCHITECTURE.md` §7, `02` §7.12, `03` §5.1 and `03` §11 — you remove the feature *and* the apology. Sharing, role change and revoke all still work. |
 | 3 | **`DELETE /api/documents/:id` + the `⋯` menu + confirm dialog + tests** (T10, T16) | **25 min** | C21, marked cuttable in `00-foundation.md` §3. No brief line asks for delete. If only the affordance is cut (item 11 below), the endpoint and its `403`-for-EDITOR test stay and the capability is still real and tested. |
 | 4 | **`PATCH .../shares/:userId` + the per-row role `Select`** (T11, T19) | **20 min** | Revoke-and-re-share achieves the same outcome through endpoints that already exist — the share `POST` upserts, so re-inviting at a new role *is* the role change. |
@@ -795,7 +834,7 @@ plan and an 8-hour day when the parallelism in S2 is not available.
 | 9 | **`loading.tsx` skeletons for the two routes** (T15, T17) | 25 min | Server render is fast enough that they are rarely seen. **`not-found.tsx` stays** — it is the UI half of the `NONE → 404` rule and it is on camera in the video. Next's defaults cover the rest. |
 | 10 | **The share-dialog polish** (T19): optimistic role update + rollback, per-row spinner and `aria-busy`, skeleton share rows | 25 min | The dialog still opens, lists collaborators, invites, and revokes. It just does it without the in-flight choreography. |
 | 11 | **Delete affordance only** (T16), keeping the endpoint | 15 min | `DELETE /api/documents/:id` and its `403`-for-EDITOR test both stay — the capability is real and tested, it just has no button. Named in `SUBMISSION.md`. Skip this if you took item 3. |
-| 12 | **"Copy my text" in the conflict dialog** (T18) | 10 min | Only relevant if you did *not* take item 1. The 409 is still detected, autosave still suspends, the amber status still stands, and **Reload latest** still works. Nothing is lost silently — which is the whole claim. |
+| 12 | ~~**"Copy my text" in the conflict dialog** (T18)~~ — **already taken by D002** | **0** | Nothing left to cut. The modal, "Copy my text" and the clipboard path never enter the build (`DECISIONS.md` D002); the banner offers **Reload** and nothing else. The row is kept, at zero, so the numbering of 13–16 does not move. The 409 is still detected, autosave still suspends, the amber banner still stands — nothing is lost silently, which is the whole claim. |
 | 13 | **`scripts/build-submission.sh`** (T29) | 15 min | It automates a five-command operation performed once. Run the five commands. The leak check on the zip is the one part worth keeping — run it by hand. |
 | 14 | **`error.tsx` boundaries** beyond `not-found.tsx` (T15, T17) | 10 min | `not-found.tsx` **stays**. Next's default error boundary covers the rest. |
 | 15 | **The entire integration suite** (T20) — the `06-test-plan.md` §8 degradation ladder | 50 min | The `unit` project is green and satisfies C16 on its own: the 24-cell permission matrix, the content shape guard, the import validators, all with **zero setup**. The harness is committed but skipped. Stated in `SUBMISSION.md` under "incomplete". The manual QA script (T21) becomes the only end-to-end evidence and therefore becomes **mandatory**, not optional. |
@@ -818,11 +857,11 @@ are new — R6 and R7 were surfaced by sibling specs, R8 by `09-video-and-submis
 
 | id | Risk | Owner | **Trigger — the observable that says it fired** | Response |
 |---|---|:--:|---|---|
-| **R1** | `@tiptap/html`'s `generateJSON` needs a DOM on Node/serverless. Confirmed: v3 ships **zero** dependencies (TRAP-3). | **T03** | Clock reaches **T+30** from `pnpm add @tiptap/html` without `SPIKE PASS` on stderr. | Take Plan C immediately: `.txt` untouched, `.md` via a hand-written `marked`-token mapper, **`.docx` cut** (cut-list item 1). Record in `DECISIONS.md` and `ARCHITECTURE.md`. Do not extend the box. |
+| **R1** | `@tiptap/html`'s `generateJSON` needs a DOM on Node/serverless. Confirmed: v3 ships **zero** dependencies (TRAP-3). | **T03** | Clock reaches **T+30** from `pnpm add @tiptap/html` without `SPIKE PASS` on stderr. | Take Plan C immediately: `.txt` untouched, `.md` via a hand-written `marked`-token mapper, **`.docx` cut** (cut-list item **7** — item 1 is the conflict system, not this). Record in `DECISIONS.md` and `ARCHITECTURE.md`. Do not extend the box. |
 | **R2** | Prisma + Neon + Vercel wiring fails only at deploy time. | **T08** | Any of the four hour-2 questions is red, **or** `/api/health` returns `db:"down"`, **or** `vercel env ls` shows fewer than six rows. | Fix at hour 2 with six hours of runway. The two named traps: no root `postinstall: prisma generate` → `Module not found: @prisma/client`; the **direct** string in `DATABASE_URL` → *everything works* until a reviewer's concurrency produces `too many connections`. Check the `-pooler` substring before **every** deploy. |
 | **R3** | Integration tests need a real Postgres, and the reviewer may not have Docker. | **T04**, T20 | `pnpm test:unit` requires anything beyond `pnpm install` — a `.env`, a container, a network call, a `prisma generate` side effect. | The `unit` project's `include` glob is the mechanism, not discipline. Verified once by deleting `node_modules` and `.env` and running it. If it breaks, the **suite** is wrong, not the promise. |
-| **R4** | Autosave + optimistic concurrency 409s the user against themselves. | **T18** (client), T10 (server) | A single user editing one document for two minutes produces **any** 409. | The token lives in a `useRef`, advances only from a `200` body, and there is at most one `PATCH` in flight per document. The fix is client serialisation, never loosening the server predicate. Covered by T20's stale-token case. |
-| **R5** | Time. The nine slices sum to ~16 agent-hours against 8 wall-clock hours; 8 h only exists at ~2.1× parallelism. | **T21**, T00 | Clock reaches **5:30** with any W3/W4 task unmerged; **or** clock reaches 3:00 and W3 is not underway; **or** you are working solo, in which case it has already fired — start cutting at hour 3. | Freeze. Cut from §7 top-down until the merged set is green, and write every cut into `SUBMISSION.md`. Do not borrow from W6/W7 — see S6. |
+| **R4** | Autosave + optimistic concurrency 409s the user against themselves. | **T18** (client), T10 (server) | A single user editing one document for two minutes produces **any** 409. | The token lives in a `useRef`, advances only from a `200` body, and there is at most one `PATCH` in flight per document. **`DECISIONS.md` D002 keeps that single-in-flight guard explicitly non-optional** while cutting the merging queue around it — skip-if-in-flight, re-fire once if still dirty. The fix is client serialisation, never loosening the server predicate. Covered by T20's stale-token case. |
+| **R5** | Time. The nine slices sum to ~15.5 agent-hours against 8 wall-clock hours; 8 h only exists at ~2.1× parallelism. | **T21**, T00 | Clock reaches **5:30** with any W3/W4 task unmerged; **or** clock reaches 3:00 and W3 is not underway; **or** you are working solo, in which case it has already fired — start cutting at hour 3. **These are the two triggers `DECISIONS.md` D001 names as the only things that reopen the "no up-front cuts" ruling.** | Freeze. Cut from §7 top-down until the merged set is green, and write every cut into `SUBMISSION.md`. Do not borrow from W6/W7 — see S6. |
 | **R6** | **Spec divergence.** Six of nine specs contradict a sibling on error codes, capability names, the Zod major, module paths, the session env var, the compose file, and idempotency. | **T02** | Any implementer hits a contradiction that is **not** already ruled on in `specs/DECISIONS.md`. | Stop, escalate to the lead, get a one-line ruling appended to `DECISIONS.md`, continue. Never resolve it locally — that is how two modules end up with two vocabularies. |
 | **R7** | **Vercel Deployment Protection** shows a reviewer an SSO wall on a deployment that looks perfectly healthy to the owner. | **T08** | An **incognito** hit on the production URL shows a Vercel login wall. | Settings → Deployment Protection → disabled for production. Checked at the **hour-2** deploy, not at hour 7:50. |
 | **R8** | **The Drive folder is not publicly shared.** The single most common way a submission like this scores zero, and it fails silently for the submitter. | **T29** | The logged-out incognito check shows "You need access", or "Anyone at \<org\>", or `source-code.zip` will not download anonymously. | Use a **personal** Google account, not a Workspace one. Set sharing before *and* after upload. Verify from a logged-out window in a **different browser**, and download the zip, don't preview it. |
@@ -836,9 +875,11 @@ are new — R6 and R7 were surfaced by sibling specs, R8 by `09-video-and-submis
 written into `00-foundation.md` (§2a versions · §2b env · §5 seed · §5a module map · §6a capability
 keys · §7a error registry · §7b constants · §7c session reads) and propagated into every sibling
 that restated it. The specs no longer disagree, so **T02's job is much smaller than it was**: copy
-this table into `specs/DECISIONS.md` as the record of *why*, confirm the two rows still marked ⏳,
-and move on. If an implementer hits a contradiction that is not here, that is R6 firing — escalate,
-do not resolve it locally.
+this table into `specs/DECISIONS.md` as the record of *why*, confirm the **one** row still marked ⏳
+(row 55 — row 54 was closed by D003), and move on. Rows **56–59** are the rulings already appended
+to `DECISIONS.md` as **D001–D004**; they are canonical there and are reproduced here only so this
+file's own record is complete. If an implementer hits a contradiction that is not here, that is R6
+firing — escalate, do not resolve it locally.
 
 | # | Contradiction | Recommended ruling |
 |---:|---|---|
@@ -895,15 +936,22 @@ do not resolve it locally.
 | 51 | Seed size: Alice owns four (`01`) vs three (`08`, `09`) | ✅ **Five documents, Alice owns four and has shared three**, pinned in `00` §5. `08`'s README table and `09`'s pre-flight checklist were corrected. |
 | 52 | `04` §4.4 demo hints name "Team notes", which the seed never creates | ✅ **Hints now name real seeded documents** — Bob is editor on "Q3 Product Roadmap", Carol is viewer on "Team Handbook". |
 | 53 | `03` cross-references `04-api-and-validation.md`, `05-editor-and-autosave.md`, `07-testing.md` — none exist | ✅ **Real filenames** in `03`, `02` §5, `06` and `09`. |
-| 54 | ⏳ Neon region (`07` §OQ1) | **Still open, and it needs a human.** Free-tier region is fixed at project creation. Default `us-east-1` + Vercel `iad1`; change both before §2.1 if the reviewers are EU-based. |
+| 54 | Neon region (`07` §OQ1) | ✅ **Closed by `DECISIONS.md` D003 — AWS `us-east-1`, paired with Vercel `iad1`.** No longer open and no longer needs a human. See row 58. |
 | 55 | ⏳ `useEditorState` availability in `@tiptap/react@3.31.0` (`04` §12.7) | **Still open — a spike check, not a design question.** Fall back to a `useState`-bumping `onTransaction` handler. Verify in the first five minutes of T03 alongside the underline check. |
+| 56 | Parallelism, and whether any cut is taken up front (§1 S2, §7) | ✅ **`DECISIONS.md` D001.** The build runs **3–4 agents wide** through W1, W3, W4 and W6 — the ~2.1× the 8-hour clock needs. **Nothing is cut in advance**; §7 is entered only when a wave actually slips, from the top. The single trigger that reopens it: **3:00 with W3 not underway, or 5:30 with any W3/W4 task unmerged** (R5). |
+| 57 | Cut-list item 1 — the optimistic-concurrency system (§7, T10, T18) | ✅ **`DECISIONS.md` D002. It ships reduced, at ~30 min, not cut.** Ships: `lastKnownUpdatedAt` (ISO-validated), the conditional `updateMany` → `409 CONFLICT`, `updatedAt` returned on every `200`, one in-flight `PATCH` per document, the `conflict` state that suspends autosave, an inline amber banner with **Reload**, one integration case, the `ARCHITECTURE.md` paragraph and the video sentence. Does not ship: `ConflictDialog.tsx`, **"Copy my text"** and the clipboard path, the request-**merging queue**, the conflict-*recovery* test, a dedicated video beat. The merging queue was the expensive part, not the in-flight guard — separating them is what makes this 30 minutes instead of 75. |
+| 58 | Neon / Vercel function region (row 54, `07` §2) | ✅ **`DECISIONS.md` D003 — Neon on AWS `us-east-1`, Vercel functions on `iad1`**, co-located. Decided **before** the Neon project is created, because the free tier fixes the region at creation. Reviewers are US-based, and Neon's free tier has no South America region, so this is the answer regardless. |
+| 59 | Repository existence, visibility and commit order (T01) | ✅ **`DECISIONS.md` D004.** `github.com/TheNatas/shared-docs` is **public and already pushed**; the **spec set is commit 1** and the implementation starts at **commit 2**, so the history shows the specification predating the build. Remote over **HTTPS** via `credential.helper = !gh auth git-credential` — the snap-confined `gh` cannot `exec ssh`. T01 creates no repo. |
 
 ---
 
 ## Definition of done — for this plan
 
 - [ ] Every task T01–T29 has an owner and a wave before W1 starts.
-- [ ] `specs/DECISIONS.md` exists and rules on all 25 rows of Appendix A before any W1 agent is launched.
+- [ ] `specs/DECISIONS.md` exists, carries **D001–D004**, and rules on every row of Appendix A
+      before any W1 agent is launched.
+- [ ] The build is actually staffed **3–4 agents wide** through W1/W3/W4/W6 (D001), and **no cut
+      from §7 was taken before a wave slipped**.
 - [ ] No file appears in two tasks' "creates or modifies" list within the same wave.
 - [ ] The R1 decision is recorded within 30 minutes of `pnpm add @tiptap/html`.
 - [ ] A production deployment with a green `/api/health` exists **before hour 3**.
@@ -970,7 +1018,8 @@ side and the reason, is Appendix A above (55 rows). The ones with the largest bl
 now ordered by cost per unit of grade risk, with an explicit "where to enter the list" table. The
 coverage review's six unasked-for features — the `409` system, `GET /api/users` + autocomplete,
 `DELETE` + its UI, `PATCH .../shares/:userId`, the `beforeunload`/keepalive flush, and undo/redo —
-are items 1–6, ≈2 h 30, none of them touching a brief line. Two more were cut outright rather than
+are items 1–6, now **≈2 h 25** (item 1 is 30 min, not 1 h 15, since D002 already took the expensive
+half), none of them touching a brief line. Two more were cut outright rather than
 listed, because they were second implementations of an existing bound: `05`'s node/character budget
 with its recursive `measure()` walk (~40 min) and `06` §4.3's recursive content schema with its
 depth cap (~30 min). `MAX_CONTENT_BYTES` already did both jobs.
@@ -983,7 +1032,7 @@ do not cover what ships cannot be used to decide what to cut at hour 5.
 
 | Review finding | Verdict | Why |
 |---|---|---|
-| Cut the optimistic-concurrency system outright (coverage §5, "the one cut to take if you take only one") | **Moved to the cut list, not removed from the specs.** | The finding is correct that it maps to no brief line and costs ~1 h 15, and it is now **item 1** with the exact instruction that its whole value survives as one `ARCHITECTURE.md` paragraph. But it is also the spec set's only concrete answer to "you did not build real-time collaboration", it is on camera at 3:00, and at 3–4 agents it fits. Deleting it from five specs would destroy a defensible feature to satisfy a budget that parallelism may not have. It is a decision for hour 3, pre-made, not a decision for now. |
+| Cut the optimistic-concurrency system outright (coverage §5, "the one cut to take if you take only one") | **Ruled on: `DECISIONS.md` D002 — it ships *reduced*, at ~30 min.** (Superseding the earlier "moved to the cut list, decide at hour 3".) | The finding was correct that the *full* system maps to no brief line and cost ~1 h 15. It is also the spec set's only concrete answer to "you did not build real-time collaboration", it is in the video, and at the 3–4 agents D001 fixes, the reduced form fits. So the split was made on the merits rather than the clock: everything defending *"last write wins, but never silently"* ships — token, conditional `updateMany`, `409`, single in-flight `PATCH`, the `conflict` state, an inline banner with **Reload**, one integration case — and everything that merely polished the recovery goes: the modal, "Copy my text", the merging queue, the recovery test, the dedicated video beat. **~45 minutes saved, the whole engineering argument kept.** What is left is still §7 item 1, now worth 30 min, and it is no longer a decision waiting at hour 3. |
 | Prisma **6.16** (consistency #65) | **Rejected — 7.10.0.** | `_toolchain-findings.md` was verified against the live registry and declares itself authoritative on versions. The review's real objection — that Prisma 7 breaks `package.json#prisma.seed` silently — is a genuine trap, so it is fixed rather than avoided: `prisma.config.ts` is now mandatory in `01` §2, in `T04`'s DoD, and in `07`'s troubleshooting table. ~10 minutes against an unpinnable moving target. |
 | `03` §12.2's tightening of `GET /api/users` (`q.length >= 3`, `take: 5`) | **Rejected**, and recorded as a rejection in `03` §12 and `02`'s Rulings. | The picker queries at 2 characters; the proposal would silently return nothing. It also would not remove the enumeration surface on a three-account directory, only make it look smaller. `ARCHITECTURE.md` names the trade and the real fix instead. |
 | `03` §12.1's three-member `AccessRole` with `NONE` as `null` | **Rejected.** | Elegant, and it breaks the highest-value test in the repo: `can('NONE', c)` has to be callable for the 24-cell matrix to exist. Recorded in `03` §12.1 with the reasoning, since the losing argument was a good one. |
@@ -996,8 +1045,10 @@ do not cover what ships cannot be used to decide what to cut at hour 5.
 
 ### Still open, and needing a human
 
-1. **Neon region** (`07`, Appendix A row 54). Fixed at project creation on the free tier; the
-   runbook defaults to `us-east-1` + Vercel `iad1`. Change both before creating the project if the
-   reviewers are EU-based.
-2. **`useEditorState` availability** in `@tiptap/react@3.31.0` (`04` §12.7, Appendix A row 55). A
+1. **`useEditorState` availability** in `@tiptap/react@3.31.0` (`04` §12.7, Appendix A row 55). A
    two-minute check in T03, with the fallback already written.
+
+That is the whole list. The Neon region left it: **D003** fixes it at AWS `us-east-1` with Vercel
+`iad1` (Appendix A rows 54 and 58). Parallelism and the up-front-cut question left it with **D001**,
+the conflict system's scope with **D002**, and the repository with **D004** — all four are in
+`specs/DECISIONS.md`, which outranks this file.

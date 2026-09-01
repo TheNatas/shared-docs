@@ -28,11 +28,11 @@ loud*. Those two are the ones candidates skip.
 |---|---|---|---|---|
 | V1 | The main user flow | Live demo, 0:35–2:02 | 87s | Low — impossible to skip |
 | V2 | What functionality works end to end | Live demo + one explicit sentence at 3:00 | 87s shared + 6s | **Medium** — reviewers want it *claimed*, not just shown |
-| V3 | What you intentionally deprioritized | Spoken beat, 3:38–4:08 | 30s | **High — most-skipped, explicitly graded** ("strong candidates make deliberate scope cuts and explain them clearly") |
-| V4 | Key implementation decisions | Spoken beat, 3:00–3:38 | 38s | Medium |
-| V5 | How AI supported your workflow | Spoken beat, 4:08–4:44 | 36s | **High — most-skipped, explicitly graded** ("practical AI usage, not volume") |
+| V3 | What you intentionally deprioritized | Spoken beat, 3:30–4:05 | 35s | **High — most-skipped, explicitly graded** ("strong candidates make deliberate scope cuts and explain them clearly") |
+| V4 | Key implementation decisions | Spoken beat, 3:00–3:30 | 30s | Medium — the conflict system is **one sentence** here, not a beat (D002) |
+| V5 | How AI supported your workflow | Spoken beat, 4:05–4:44 | 39s | **High — most-skipped, explicitly graded** ("practical AI usage, not volume") |
 
-**Consequence for the script:** V3 + V5 get **66 seconds of the 284**, roughly a quarter of the
+**Consequence for the script:** V3 + V5 get **74 seconds of the 284**, better than a quarter of the
 video, with nothing on screen but a static slide or the dashboard. That feels wasteful while
 recording. It is not. Do not trade those seconds back to the demo.
 
@@ -54,12 +54,12 @@ exactly as much as a 5:10 one. The 16 seconds of slack absorb one fumbled senten
 | 2:02–2:35 | 33s | Share dialog: add **Bob → Editor**, then **Carol → Viewer**; both appear in the share list with role selects | Owner-only dialog. Mention re-sharing the same person updates their role instead of duplicating. |
 | 2:35–2:52 | 17s | **Second browser profile**, already logged in as Carol → open the shared doc | Read-only banner, toolbar disabled, doc appears under **Shared with me** with a `Viewer` badge. |
 | 2:52–3:00 | 8s | Terminal (large font) — pre-typed `curl` PATCH as Carol → `403`; second command on a doc she can't see → `404` | "The disabled toolbar is a courtesy. This is the actual control — and no-access returns 404, not 403, so we never leak that a document exists." |
-| 3:00–3:38 | 38s | Editor or a static "Decisions" slide; optionally the `resolveAccess` function in the editor | V2 sentence first: *"Everything I just showed works end to end on the deployed URL — nothing is stubbed."* Then four decisions: ProseMirror JSON storage; one `resolveAccess` resolver every route calls; 403 vs 404; optimistic concurrency (`lastKnownUpdatedAt` → `409`) instead of fake real-time. |
-| 3:38–4:08 | 30s | Static "Cut / Next" slide | V3: cut real-time collaboration (days of work; shipped an honest 409 conflict instead), comments/presence, tables/images, self-service signup, blob storage. Then: with 2–4 more hours — share revocation UX polish, document version history, and a Playwright end-to-end test for the share flow. |
-| 4:08–4:44 | 36s | Same slide, or the repo's `specs/` folder | V5 + sign-off. See A.3 for verbatim. |
+| 3:00–3:30 | 30s | Editor or a static "Decisions" slide; optionally the `resolveAccess` function in the editor | V2 sentence first: *"Everything I just showed works end to end on the deployed URL — nothing is stubbed."* Then four decisions: ProseMirror JSON storage; one `resolveAccess` resolver every route calls; 403 vs 404; and concurrency in **exactly one sentence** — *"Every save carries the version it was based on, so a stale write gets a 409 and an inline reload banner instead of silently overwriting someone."* **No conflict demo on camera and no dedicated conflict beat** (`DECISIONS.md` D002). |
+| 3:30–4:05 | 35s | Static "Cut / Next" slide | V3: cut real-time collaboration (days of work; shipped an honest 409 with an inline reload banner instead), comments/presence, tables/images, self-service signup, blob storage. Then: with 2–4 more hours — share revocation UX polish, document version history, and a Playwright end-to-end test for the share flow. **The 5 extra seconds here came from the folded conflict beat — spend them slowing down, not on a sixth cut.** |
+| 4:05–4:44 | 39s | Same slide, or the repo's `specs/` folder | V5 + sign-off. See A.3 for verbatim. **The 3 extra seconds are pacing room for the two named examples — not a sixth topic.** |
 
-**Reconciliation notes vs the suggested allocation.** Three changes, all for the same reason —
-buying slack:
+**Reconciliation notes vs the suggested allocation.** Four changes. The first three are for the
+same reason — buying slack; the fourth applies D002:
 
 1. The core flow is 55s instead of 60s; typing a paragraph on camera is dead air, so type *short*.
 2. The sharing beat is split 33/17/8 rather than one 60s block, because the second-browser hand-off
@@ -67,6 +67,12 @@ buying slack:
    *behind* the first window — switch to it, do not navigate to it.
 3. The `curl` commands are **pre-typed in the terminal's scrollback**, so 2:52–3:00 is two `Enter`
    presses, not eight seconds of typing. Type them during prep, clear the screen, then `↑` on camera.
+4. The implementation-decisions beat is **30s, not 38s**. Per `DECISIONS.md` D002 the
+   optimistic-concurrency system ships in its reduced form, so it is **one sentence** inside that
+   beat — there is no dedicated conflict beat at ~3:00, nothing is demonstrated on camera, and A.4
+   sets nothing up for it. The 8 seconds that frees go to **V3 (+5s) and V5 (+3s)**, the two graded
+   beats, per the rule in A.1: do not trade them back to the demo. Total runtime is unchanged at
+   **4:44**.
 
 ### A.3 Verbatim script — opening and closing
 
@@ -80,7 +86,7 @@ Pace target ~150 words/minute (≈2.5 words/second).
 > editor. Everything you're about to see is the deployed build, not localhost. Eight hours, start to
 > finish."
 
-**Closing — 4:08 to 4:44 (89 words, ≈36s):**
+**Closing — 4:05 to 4:44 (89 words, ≈36s spoken in a 39s slot):**
 
 > ⚠️ **The two examples in this passage are PLACEHOLDERS.** They are the *shape* of the answer —
 > one named speed-up, one named rejection — filled in at **hour 7**, after `AI-WORKFLOW.md` §3 is
