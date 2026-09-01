@@ -267,3 +267,55 @@ Still stale in the specs, to be reconciled **after W1 completes**:
 **This staleness is currently harmless**: W1's three agents were each given the overrides
 directly in their briefs, so no agent is building from a stale line. It stops being harmless at
 W3, so it is reconciled before W3 starts.
+
+## D009 — Neon is live. Pooled/direct split verified, not assumed.
+
+**Ruled 2026-09-01. Closes risk R2's database half.**
+
+Project created in **AWS us-east-1** per D003. Endpoint `ep-frosty-union-auizxcxe`, database
+`neondb`, role `neondb_owner`.
+
+### What was verified, and how
+
+| Check | Result |
+|---|---|
+| Direct endpoint (no `-pooler`) resolves and accepts DDL | `prisma migrate deploy` applied `20260901185848_init` |
+| Pooled endpoint (`-pooler`) reachable at runtime | all three tables queried through it |
+| Pooled endpoint survives **concurrency** | 12 simultaneous queries, all consistent |
+
+The concurrency check is the one that matters. A single sequential query succeeds against
+*either* endpoint, which is exactly why R2 says a swapped pair "works" until a reviewer's
+concurrency produces `too many connections`. Twelve parallel queries through PgBouncer also
+exercises the `pgbouncer=true` flag — without it, transaction-mode pooling hands each query a
+different server connection and prepared statements go missing as a sporadic
+`prepared statement "s0" does not exist`.
+
+### Connection-string handling
+
+- `DATABASE_URL` — pooled, plus `?sslmode=require&pgbouncer=true&connection_limit=1`.
+- `DIRECT_URL` — direct endpoint, `?sslmode=require`. Migrations only.
+- **`channel_binding=require` was dropped** from Neon's copy-paste string. It is a libpq
+  parameter that Prisma's Rust driver does not consume; `sslmode=require` already forces TLS.
+- Both live in `.env.production.local` (mode `600`, matched by `.gitignore`'s `.env*.local`).
+  Confirmed with `git check-ignore` rather than assumed. The local `.env` still points at the
+  Docker Postgres and was **not** touched — W1's agents are using it.
+- A fresh production `AUTH_SECRET` was generated with `openssl rand -base64 32`. It is **not**
+  the local one; the local secret never reaches production.
+
+### ⚠️ Credential rotation — an action for the human
+
+The pooled connection string was pasted into the assistant transcript, so it exists outside the
+password manager. **Rotate the `neondb_owner` password in the Neon console once the assessment
+is submitted** (Neon → project → Roles → reset password), then update `DATABASE_URL` and
+`DIRECT_URL` in Vercel and in `.env.production.local`.
+
+Not urgent — the database holds only seeded demo data, and the brief requires reviewers to reach
+a live deployment — but it should not outlive the review. This is added to
+`07-deployment-runbook.md` in the D005/D006/D007 reconciliation pass.
+
+### Still open for W2
+
+Vercel: import the repo, set the three env vars in **both** Production and Preview, set the
+function region to **`iad1`** explicitly, and turn **Deployment Protection off** (R7 — an SSO
+wall looks perfectly healthy to the owner and blocks every reviewer). Seeding production waits
+on T04's `prisma/seed.ts`, currently in flight.
