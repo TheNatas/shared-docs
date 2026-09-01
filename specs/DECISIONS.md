@@ -513,3 +513,60 @@ deployment-specific URL.
 **Rule for every future production seed:** echo the masked `DIRECT_URL` and read the host before
 running it. The seed upserts, so it is idempotent — but it also resets seeded titles, and running
 it against the wrong database is silent.
+
+## D013 — `.env.production.local` is a Next.js filename. It silently pointed a "local" server at production.
+
+**Found 2026-09-01 during the W3+W4 production smoke. My error, and the most dangerous one so far.**
+
+### What happened
+
+The W3+W4 end-to-end smoke test was run against `http://localhost:3111`, started with
+`PORT=3111 pnpm start`, in the belief that it would use `.env` and therefore the local Docker
+Postgres. It did not. **It wrote to Neon.** Four junk documents appeared in the production
+database — a blank one and three imports — plus a share added and revoked on `seed-doc-private`.
+
+### Why
+
+`pnpm start` is `next start`, which runs in **production mode**, and Next.js's env cascade is:
+
+```
+.env.production.local   ←  loaded FIRST in production
+.env.local
+.env.production
+.env
+```
+
+D009 created `.env.production.local` to hold the Neon credentials, following
+`07-deployment-runbook.md`'s naming. That filename is not inert — it is a **Next.js convention**,
+and it outranks `.env` in exactly the mode `pnpm start` runs in. Nothing warned, nothing errored,
+and the app behaved perfectly. The smoke test passed 31/31 *against production*.
+
+The only reason it was caught: a later production check asserted `alice owned=4` and got **8**.
+An assertion on an exact count, not on "it works", is what surfaced it.
+
+### Ruling
+
+- The file is renamed to **`ops/neon.env`** — a name no framework auto-loads. `chmod 600`, and
+  `.gitignore` carries an explicit comment saying *why* the name matters, so nobody renames it
+  back to something tidier-looking.
+- Production credentials are sourced **explicitly** (`set -a; . ./ops/neon.env; set +a`) for the
+  one command that needs them, never left where a tool can find them.
+- The four junk documents were deleted. Production is back to exactly `{ users: 3, docs: 5,
+  shares: 4 }` with the seeded share matrix intact.
+
+### The generalisable lesson
+
+**A credentials file named after a framework convention is a loaded gun.** The runbook chose
+`.env.production.local` because it reads as "production, local machine, gitignored" — all true,
+and all beside the point. The name is *also* an instruction to Next.js.
+
+Two process points that actually mattered here:
+
+1. **Assert exact counts, not liveness.** `db: "up"` would have passed. `users: 3` and
+   `owned: 4` are what caught both this and D012's missing production seed. Cheap assertions on
+   exact numbers are worth far more than they cost.
+2. **This is the same failure family as D012** — a command silently targeting the wrong database
+   because of env resolution nobody looked at. Twice in one build. Hence T20's `global-setup.ts`
+   guard, which must refuse to run unless `TEST_DATABASE_URL` names `shared_docs_test` on `55432`:
+   a truncating test suite pointed at a real database is not recoverable, and the guard is the
+   only thing standing between here and that.

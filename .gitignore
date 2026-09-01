@@ -37,3 +37,8 @@ yarn-error.log*
 
 # submission staging (built artifacts, not source)
 submission/source-code.zip
+
+# Neon production credentials — deliberately NOT named .env*.local:
+# `next start` runs in production mode and Next auto-loads .env.production.local
+# ahead of .env, which silently points a "local" server at production. See D013.
+ops/neon.env
