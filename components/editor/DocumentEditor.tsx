@@ -12,6 +12,7 @@ import { EditorToolbar } from "@/components/editor/EditorToolbar";
 import { ReadOnlyBanner } from "@/components/editor/ReadOnlyBanner";
 import { SaveStatus } from "@/components/editor/SaveStatus";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ShareDialog } from "@/components/share/ShareDialog";
 import { useAutosave } from "@/hooks/useAutosave";
 import type { DocumentDetail, GetDocumentResponse } from "@/lib/api-types";
 import { apiFetch } from "@/lib/client";
@@ -36,10 +37,11 @@ export function DocumentEditor({ doc }: { doc: DocumentDetail }) {
   const [contentError, setContentError] = useState(false);
   const [reloading, setReloading] = useState(false);
 
-  // The owner-only action slot in the top strip. T19 replaces this line with
-  // `<ShareDialog doc={doc} />`; the `isOwner` guard below it is what keeps an EDITOR from
-  // ever seeing a Share button (04-ui-spec.md §8, §6.8).
-  const shareSlot: ReactNode = null;
+  // The owner-only action slot in the top strip. ShareDialog self-gates on
+  // `doc.shares === null` (the ownership signal), so it is mounted unconditionally and
+  // decides for itself whether to render — an EDITOR never sees a Share button
+  // (04-ui-spec.md §8, §6.8).
+  const shareSlot: ReactNode = <ShareDialog doc={doc} />;
 
   // `useEditor` runs after `useAutosave` and the editor does not exist yet when the hook's
   // options are built, so the 403 handler reaches it through a ref rather than a closure.
