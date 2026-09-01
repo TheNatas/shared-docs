@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
-import "./globals.css";
 import { Geist } from "next/font/google";
+
+import { Toaster } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
+import "./globals.css";
 
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
-
-// Bare shell. T06 owns the final layout (fonts, theme, chrome).
 export const metadata: Metadata = {
   title: "shared-docs",
   description: "Create, import and share rich-text documents.",
@@ -17,7 +17,13 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={cn("font-sans", geist.variable)}>
-      <body>{children}</body>
+      <body className="min-h-dvh antialiased">
+        {children}
+        {/* Pinned to light: 04 §11 ships no dark mode, and sonner's default `theme="system"`
+            would paint dark toasts over a permanently light app on any machine whose OS
+            prefers dark. */}
+        <Toaster theme="light" />
+      </body>
     </html>
   );
 }

@@ -380,3 +380,87 @@ setup rather than committing 2 MB of filler into every clone.
 
 `samples/` holds reviewer-facing copies plus a README, so `SUBMISSION.md`'s "Review in 60
 seconds" points at files that exist.
+
+## D011 — Zod is `^4.1` (my T01 pin was wrong), and `lib/api.ts` lands early.
+
+**Ruled 2026-09-01, on W1's returned blockers. Both problems originate in T01.**
+
+### 1. The Zod pin
+
+`00-foundation.md` §2a — which declares itself canonical over every other spec — pins **`zod ^4.1`**,
+and `03`, `06` and `10-task-graph` ruling #3 all write Zod 4 syntax. T01 instead installed
+**`zod@3.25.76`**, taken from `02-api-contract.md`'s own open-questions note rather than from the
+canonical file. `_toolchain-findings.md` had left Zod as "3.x or 4.x — pick one and pin it", so
+nothing caught it.
+
+The cost was immediate and visible in W1's output: **three files reached for three different Zod
+APIs.** `lib/env.ts` used the Zod 3 `required_error` spelling; `lib/documents/content.ts` imported
+`{ z } from "zod/v4"` — the v4 API that 3.25.x happens to ship on a subpath — because the specced
+`z.looseObject` does not exist on the v3 root export; and T07 would have written bare-`zod` Zod 4
+syntax. Both agents flagged it rather than quietly diverging, which is the process working.
+
+**Ruling: `zod@^4.1.0`, resolved to 4.5.4. The house import is bare `zod`.** `zod/v4` subpath
+imports are banned — they are a workaround for a pin that no longer exists, and two modules
+importing the same library by different specifiers is how incompatible schema objects meet.
+
+Applied: `content.ts` `zod/v4` → `zod`; `env.ts` `required_error` → the Zod 4 `{ error: … }`.
+
+The general lesson, and the second time this exact shape has bitten: when specs disagree about a
+version, the canonical file wins, and `_toolchain-findings.md` must not leave a "pick one" open.
+An unpinned choice gets made independently by every agent that needs it.
+
+### 2. `lib/api.ts` and `lib/api-types.ts` land in W1, not W2
+
+`03-auth-and-permissions.md` has `lib/permissions.ts` and `lib/session.ts` throw `ApiError` from
+`@/lib/api`, and both were built in W1 — but `10-task-graph.md` assigns that module to **T07 in
+W2**. The ordering is simply wrong: two W1 modules import something W2 creates.
+
+The consequence was not cosmetic. `pnpm exec tsc --noEmit`, `pnpm build` **and** `pnpm test:unit`
+were red across the entire repo, which breaks `06-test-plan.md` §2.4's headline promise — *a
+reviewer must always be able to run something and see green*. Every W1 agent hit it and correctly
+reported it as not-theirs rather than papering over it.
+
+**Ruling: T01 creates both files now, containing only what W1 needs** — the canonical
+`ApiErrorCode` union and `ApiErrorBody` in `lib/api-types.ts`, and the `ApiError` class in
+`lib/api.ts`. Both carry a header saying **T07 EXTENDS them and must not recreate them**, because
+the union and the class are already canonical and already thrown from two live modules.
+
+### 3. `test:integration` script
+
+`06-test-plan.md` §2.3 specifies `pnpm db:test:up && vitest run --project integration`; T01 shipped
+it without the prefix, so T20 would have hit a dead socket. Fixed. A `pretest:integration` hook is
+**not** a substitute — pnpm does not run pre/post lifecycle scripts without
+`enable-pre-post-scripts=true`.
+
+### W1 verification — measured, not claimed
+
+| Check | Result |
+|---|---|
+| `pnpm exec tsc --noEmit` | clean |
+| `pnpm build` | green; middleware compiles as an Edge Proxy, no Node-API warning |
+| `pnpm test:unit` with `.env`, `.env.test`, `.env.production.local` all moved aside and the three vars unset | **50 tests, 2 files, 181 ms, green** — R3 proven by removal, not assertion |
+| `pnpm db:seed` run twice | `{ users: 3, docs: 5, shares: 4 }` unchanged — idempotent |
+| Access matrix | Carol reads exactly `Imported: Product Brief` and `Team Handbook`; **no** share row on `Alice — Private Draft`, so the 404 path is demonstrable |
+| `bcrypt.compare("demo1234", …)` | true for all three users |
+
+### Accepted W1 deviations
+
+- **No `MAX_CONTENT_DEPTH` / no 60-deep rejection.** T04 followed `01` §5.2, `06` §4.3 and
+  `10-task-graph` ruling #40, all of which deleted the depth bound; its own task DoD still
+  demanded it. It implemented the ten-line root-shape guard and asserted the behaviour that
+  exists. Correct call — a test asserting a limit the implementation does not have is worse than
+  no test. The byte ceiling (`MAX_CONTENT_BYTES`, 1 MB) is the real guard, enforced as a handler
+  step returning `413`.
+- **Vitest 4 removed `poolOptions`/`forks.singleFork`.** Replaced with
+  `pool: 'forks'` + `fileParallelism: false` + `maxWorkers: 1` — the v4 idiom for the same
+  one-worker-one-database guarantee T20 depends on.
+- **`dotenv` and `vite-tsconfig-paths` are not installed.** Substituted with Node's built-in
+  `process.loadEnvFile` and an explicit regex `resolve.alias`. The regex form is deliberate: a
+  bare `'@'` string alias would also rewrite `@prisma/client` into a filesystem path. Do not
+  "fix" `vitest.config.ts` by adding those imports without adding the packages.
+- **`<Toaster theme="light" />`** rather than bare — shadcn's sonner wrapper reads `next-themes`,
+  and with no provider mounted it falls back to `system`, painting dark toasts over a
+  permanently-light app on any machine whose OS prefers dark.
+- **`.prose-doc` wrapped in `@layer components`** — unlayered CSS beats every Tailwind utility
+  regardless of specificity, so an unlayered `.prose-doc p { margin }` would silently win over a
+  `mb-*` utility applied later.
