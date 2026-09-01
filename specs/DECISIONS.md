@@ -464,3 +464,52 @@ it without the prefix, so T20 would have hit a dead socket. Fixed. A `pretest:in
 - **`.prose-doc` wrapped in `@layer components`** — unlayered CSS beats every Tailwind utility
   regardless of specificity, so an unlayered `.prose-doc p { margin }` would silently win over a
   `mb-*` utility applied later.
+
+## D012 — DEPLOY #1 passed. Live URL is the project alias, **not** `shared-docs.vercel.app`.
+
+**Ruled 2026-09-01. Closes T08, the hour-2 gate, and the rest of risk R2.**
+
+### Live URL
+
+```
+https://shared-docs-thenatas-projects.vercel.app
+```
+
+Written to `live-url.txt`.
+
+**⚠️ `shared-docs.vercel.app` is NOT ours.** It returns `301` to `https://docs.smartenvios.tec.br`
+— an unrelated party holds the short name. It must never appear in `README.md`, `SUBMISSION.md`,
+the video, or the Drive folder: a reviewer following it lands on a stranger's site, which reads as
+a broken submission. Only the full project alias above is correct.
+
+### The four hour-2 questions, all green
+
+| Question | Evidence |
+|---|---|
+| Does the Vercel build succeed with pnpm? | deployment `success`; no `Module not found: @prisma/client` — the root `postinstall: prisma generate` did its job |
+| Can a serverless function reach Neon over the **pooled** URL? | `{"ok":true,"db":"up","users":3}` |
+| Did the migration land in production? | `prisma migrate status` → *"Database schema is up to date!"* |
+| Is Deployment Protection off? | `200` from a cookie-less `curl`, not the `401` SSO wall — **R7 clear** |
+
+Bonus, unasked: Edge middleware is live in production. `GET /documents` from an unauthenticated
+client `307`s to `/login?next=%2Fdocuments`, which proves both the matcher and the redirect work
+on the real Edge runtime rather than only in `next dev`.
+
+### The seed had NOT reached production, and only the gate caught it
+
+The first health check returned **`users: 0`**. `prisma migrate deploy` had been run against Neon
+(D009), but `pnpm db:seed` loads `.env`, which points at the local Docker Postgres — so the earlier
+seed populated *local* and production had schema with no rows.
+
+This is exactly the failure `01-data-and-persistence.md` predicted when it insisted the production
+seed is a deliberate, separate, manual step. Nothing errored; the app deployed perfectly and was
+simply empty. Had the gate asserted only `db: "up"` instead of `users: 3`, it would have passed
+while the demo accounts did not exist — and the discovery would have come mid-video.
+
+Fixed by exporting `.env.production.local` and running `tsx prisma/seed.ts` directly, after echoing
+the target host with credentials masked. `users: 3` confirmed from both the alias and the
+deployment-specific URL.
+
+**Rule for every future production seed:** echo the masked `DIRECT_URL` and read the host before
+running it. The seed upserts, so it is idempotent — but it also resets seeded titles, and running
+it against the wrong database is silent.
