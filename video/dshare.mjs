@@ -1,0 +1,27 @@
+import { chromium } from 'playwright';
+const U='https://shared-docs-thenatas-projects.vercel.app';
+const b=await chromium.launch(); const ctx=await b.newContext({viewport:{width:1600,height:900}});
+const p=await ctx.newPage();
+const log=(...a)=>console.log(...a);
+await p.goto(`${U}/login`); await p.getByRole('button',{name:/alice/i}).first().click();
+await p.waitForURL('**/documents'); await p.getByText('Q3 Product Roadmap').first().waitFor({timeout:30000});
+await p.getByText('Q3 Product Roadmap').first().click();
+await p.locator('.ProseMirror').waitFor(); await p.waitForTimeout(1200);
+
+log('1. trigger count:', await p.getByRole('button',{name:/^share$/i}).count());
+await p.getByRole('button',{name:/^share$/i}).first().click();
+await p.waitForTimeout(1500);
+const dlg = p.locator('[role=dialog]');
+log('2. dialog visible:', await dlg.isVisible().catch(e=>'ERR '+e.message));
+log('3. inputs in dialog:', await dlg.locator('input').count());
+log('   placeholders:', await dlg.locator('input').evaluateAll(ns=>ns.map(n=>n.placeholder)));
+log('4. buttons in dialog:', await dlg.locator('button').evaluateAll(ns=>ns.map(n=>JSON.stringify(n.innerText.trim()))));
+const email = dlg.locator('input[placeholder="Email address"]');
+log('5. email input count:', await email.count());
+await email.click(); await email.type('carol@example.com',{delay:20}); await p.waitForTimeout(600);
+log('6. after typing, buttons:', await dlg.locator('button').evaluateAll(ns=>ns.map(n=>JSON.stringify(n.innerText.trim()))));
+log('7. viewer btn count:', await dlg.getByRole('button',{name:/^viewer$/i}).count());
+const vis = await dlg.getByRole('button',{name:/^viewer$/i}).first().isVisible().catch(e=>'ERR');
+log('8. viewer visible:', vis);
+await p.screenshot({path:'../screenshots/probe-share-dialog.png'});
+await b.close();

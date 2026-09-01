@@ -1,0 +1,8 @@
+{
+  "name": "shared-docs-video",
+  "private": true,
+  "type": "module",
+  "description": "Recording/screenshot tooling. Deliberately isolated from the app's package.json so `pnpm install` at the repo root stays lean for reviewers.",
+  "scripts": { "shots": "node shots.mjs", "record": "node record.mjs" },
+  "dependencies": { "playwright": "1.62.1" }
+}
