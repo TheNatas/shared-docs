@@ -1,0 +1,32 @@
+# docker-compose.test.yml — throwaway Postgres for local dev AND `pnpm test:integration`.
+#
+# Port 55432 (not 5432) so it cannot collide with a Postgres already running on the
+# reviewer's machine, and cannot be mistaken for a real database. The integration
+# suite's global-setup refuses any URL that does not name shared_docs_test on 55432.
+#
+# Owned by T01 per specs/DECISIONS.md D005 (moved from T04, which landed a wave too late
+# for T01 to reach its own definition of done).
+services:
+  postgres-test:
+    image: postgres:16-alpine
+    container_name: shared-docs-postgres-test
+    environment:
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+      POSTGRES_DB: shared_docs_test
+    ports:
+      - '55432:5432'
+    volumes:
+      # Adds shared_docs_dev beside shared_docs_test, so local development and the test
+      # suite share ONE container and there is only one compose file in the README.
+      - ./.docker/initdb:/docker-entrypoint-initdb.d:ro
+    tmpfs:
+      # RAM-backed: fast, and nothing to clean up. Note the consequence — stopping the
+      # container discards local dev data. `pnpm db:seed` restores it in seconds, which
+      # is why the seed is idempotent.
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U test -d shared_docs_test']
+      interval: 1s
+      timeout: 3s
+      retries: 30

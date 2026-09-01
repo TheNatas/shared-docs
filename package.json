@@ -1,0 +1,63 @@
+{
+  "name": "shared-docs",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.34.3",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "test:watch": "vitest",
+    "db:up": "docker compose -f docker-compose.test.yml up -d --wait",
+    "db:test:up": "docker compose -f docker-compose.test.yml up -d --wait",
+    "db:test:down": "docker compose -f docker-compose.test.yml down -v",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:seed": "prisma db seed",
+    "postinstall": "prisma generate"
+  },
+  "prisma-pin-note": "prisma and @prisma/client MUST stay byte-identical at 6.19.3. Prisma 7 removed url/directUrl from the schema datasource and requires a driver adapter \u2014 see specs/DECISIONS.md D006. `prisma@latest` is an 8.0.0-rc. Do not upgrade either alone.",
+  "tiptap-pin-note": "@tiptap/extension-underline is deliberately absent: StarterKit v3 already registers it, and registering it twice throws a duplicate-name error at editor init. See TRAP-2.",
+  "dependencies": {
+    "@prisma/client": "6.19.3",
+    "@tiptap/extensions": "3.31.0",
+    "@tiptap/html": "3.31.0",
+    "@tiptap/pm": "3.31.0",
+    "@tiptap/react": "3.31.0",
+    "@tiptap/starter-kit": "3.31.0",
+    "bcryptjs": "3.0.3",
+    "jose": "6.2.10",
+    "mammoth": "1.12.2",
+    "marked": "18.0.11",
+    "next": "16.3.4",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "prisma": "6.19.3",
+    "tailwindcss": "4.3.3",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "4.1.11"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma",
+      "esbuild"
+    ]
+  }
+}

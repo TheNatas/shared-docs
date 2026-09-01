@@ -1,0 +1,4 @@
+/* Tailwind v4 entry point.
+   T01 creates this file bare so the build is green; T06 owns its final content
+   (theme tokens, the .prose-doc block) per specs/10-task-graph.md §2. */
+@import "tailwindcss";

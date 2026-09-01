@@ -71,3 +71,54 @@ cheaper — start it on **Plan B**, not Plan A:
 Keep the extension list in a single shared `lib/editor-extensions.ts` imported by both the
 client editor and the server-side importer, so parsed content can never contain nodes the
 editor cannot render.
+
+---
+
+## CORRECTION — 2026-09-01, during W0/T01: the Prisma pin above is wrong
+
+TRAP-1 correctly identified that `prisma@latest` resolves to an `8.0.0-rc` CLI against a
+stable 7.x client, and pinned both halves to **7.10.0** to fix the mismatch. That fixed the
+mismatch and introduced a worse problem, discovered the moment `postinstall` ran:
+
+```
+error: The datasource property `url` is no longer supported in schema files.
+       Move connection URLs for Migrate to `prisma.config.ts` and pass either
+       `adapter` ... to the PrismaClient constructor.
+error: The datasource property `directUrl` is no longer supported in schema files.
+Prisma CLI Version : 7.10.0
+```
+
+**Prisma 7 is a breaking redesign**, not a version bump. `url` and `directUrl` are gone from
+the schema `datasource` block, connection config moves to `prisma.config.ts`, and the client
+requires a **driver adapter** rather than a connection string. That invalidates the datasource
+block in `00-foundation.md` §5, `lib/db.ts`, and the pooled/direct deployment story in
+`07-deployment-runbook.md` §2 — the most load-bearing infrastructure section in the set.
+
+**Corrected pin: `prisma` and `@prisma/client` both at `6.19.3`.** See `DECISIONS.md` D006.
+
+The lesson for the pin table generally: `npm view <pkg> version` answers "what is newest", which
+is not the question. The question is "what does this project's specs assume, and is that still
+supported". For the other pins those answers coincided; for Prisma they did not.
+
+## CORRECTION — TRAP-3's conclusion was wrong (settled by the T03 spike)
+
+TRAP-3 observed, correctly, that `npm view @tiptap/html dependencies` returns empty and that v2
+had bundled `zeed-dom`. It then concluded that `generateJSON` would need a DOM supplied by the
+caller on a Node/serverless route, and directed the spike to start on Plan B (jsdom).
+
+**The conclusion did not follow.** `@tiptap/html@3.31.0` ships a `node` conditional export:
+
+```json
+"exports": { ".": { "import": { "browser": "./dist/index.js",
+                                "node":    "./dist/server/index.js" } },
+             "./server": { ... } }
+```
+
+Node resolves the server build automatically. It has no DOM *dependency* because it does not
+need one — not because it expects the caller to provide one. The spike passed on **Plan A**
+with zero extra packages; `jsdom` was removed again. See `DECISIONS.md` D007.
+
+**Generalisable lesson for this table:** `npm view <pkg> dependencies` describes what a package
+pulls in, which is weak evidence about what it *requires at runtime*. Reading the `exports` map
+answers the actual question and takes the same ten seconds. Combined with the Prisma correction
+above, two of this file's three traps had the right observation and the wrong inference.

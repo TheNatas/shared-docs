@@ -1,0 +1,65 @@
+// prisma/schema.prisma
+// Canonical schema — specs/00-foundation.md §5. Closed before implementation started;
+// there is nothing to discover here. T01 is the sole owner (specs/10-task-graph.md §2).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  // Runtime: Neon's PgBouncer endpoint (host contains "-pooler").
+  url       = env("DATABASE_URL")
+  // Migrations / introspection / studio: Neon's direct endpoint (session mode).
+  // Prisma Migrate needs advisory locks + DDL + a shadow database, none of which
+  // survive a transaction-mode pooler.
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  ownedDocuments Document[]      @relation("OwnedDocuments")
+  sharedWithMe   DocumentShare[] @relation("ShareRecipient")
+  sharesGranted  DocumentShare[] @relation("ShareGranter")
+}
+
+model Document {
+  id             String   @id @default(cuid())
+  title          String   @default("Untitled document")
+  content        Json // ProseMirror JSON document node
+  sourceFilename String? // set when created via import; shown as provenance in the UI
+  ownerId        String
+  owner          User     @relation("OwnedDocuments", fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  shares DocumentShare[]
+
+  // Powers the dashboard's "My documents", already ordered.
+  @@index([ownerId, updatedAt(sort: Desc)])
+}
+
+enum ShareRole {
+  VIEWER
+  EDITOR
+}
+
+model DocumentShare {
+  id          String    @id @default(cuid())
+  documentId  String
+  document    Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation("ShareRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  role        ShareRole @default(VIEWER)
+  grantedById String
+  grantedBy   User      @relation("ShareGranter", fields: [grantedById], references: [id])
+  createdAt   DateTime  @default(now())
+
+  @@unique([documentId, userId]) // one role per user per doc
+  @@index([userId]) // powers "shared with me"
+}
