@@ -1,5 +1,11 @@
 # 00 — Foundation
 
+> ⚠️ **Superseded in places by `specs/DECISIONS.md`.** D005–D012 were ruled after this
+> file was written and OUTRANK it. In particular: Prisma is **6.19.3** (not 7.x) so
+> `prisma.config.ts` must NOT exist and `package.json#prisma.seed` is correct (D006);
+> risk **R1 is CLOSED on Plan A** so `.docx` ships and no jsdom is needed (D007); Zod is
+> **^4.1** (D011). Read `DECISIONS.md` before acting on anything below.
+
 > **This file is the single source of truth.** Every other spec in `specs/` expands a
 > slice of this document and must not contradict it. If an expansion needs to deviate,
 > it changes this file first.
@@ -59,7 +65,7 @@ spec quotes a different version line, **this table wins** and that spec is the b
 |---|---|---|
 | `next` | `16.3.4` | `latest` is 16.x, not 15. Async `params` and async `cookies()` hold in 16 exactly as in 15. |
 | `react` / `react-dom` | `19.x` | whatever `create-next-app` pairs with Next 16 |
-| `prisma` / `@prisma/client` | **`7.10.0` — both, identical** | `prisma@latest` resolves to an `8.0.0-rc` CLI against a stable 7.x client (TRAP-1). Never `@latest`. **Prisma 7 moved seed registration out of `package.json`** — see §2b. |
+| `prisma` / `@prisma/client` | **`6.19.3` — both, identical** (was 7.10.0; see **D006**) | `prisma@latest` is an `8.0.0-rc` (TRAP-1). Never `@latest`. **Prisma 7 removed `url`/`directUrl` from the schema datasource and requires a driver adapter**, which would invalidate §5 and the whole pooled/direct runbook — so we stay on the last 6.x. Seed registration is `package.json#prisma.seed`; **`prisma.config.ts` must not exist.** |
 | `zod` | **`^4.1`** | Zod **4**, not 3. Consequences for schemas written elsewhere: `z.email()` not `z.string().email()`, `z.iso.datetime()` not `z.string().datetime()`, `z.looseObject({…})` not `.passthrough()`, `ctx.addIssue({ code: 'custom', … })` not `z.ZodIssueCode.custom`, and `z.flattenError(err)` not `err.flatten()`. |
 | `@tiptap/react`, `@tiptap/pm`, `@tiptap/starter-kit`, `@tiptap/html` | `3.31.0` | one line, one version |
 | `@tiptap/extension-underline` | **not installed** | already a dependency of StarterKit v3; registering it twice throws a duplicate-name error at editor init (TRAP-2) |
@@ -75,7 +81,7 @@ spec quotes a different version line, **this table wins** and that spec is the b
 | `tsx` | `^4.20` | runs `prisma/seed.ts` |
 | Node | **22.x** | pinned twice: `engines.node` and `.nvmrc`, both owned by `01-data-and-persistence.md` |
 
-`prisma.config.ts` is required because of the Prisma 7 pin: it registers the seed command that 6.x
+~~`prisma.config.ts` is required because of the Prisma 7 pin: it registers the seed command that 6.x~~ **VOID — see D006.** On the 6.19.3 pin, `package.json#prisma.seed` is the working mechanism and is already present. The rest of this paragraph described 6.x behaviour, which is what we now have:
 read from `package.json#prisma.seed`. Without it `pnpm prisma db seed` and the re-seed half of
 `prisma migrate reset` silently do nothing.
 

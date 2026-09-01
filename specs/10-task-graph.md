@@ -1,5 +1,11 @@
 # 10 — Execution Plan / Task Graph
 
+> ⚠️ **Superseded in places by `specs/DECISIONS.md`.** D005–D012 were ruled after this
+> file was written and OUTRANK it. In particular: Prisma is **6.19.3** (not 7.x) so
+> `prisma.config.ts` must NOT exist and `package.json#prisma.seed` is correct (D006);
+> risk **R1 is CLOSED on Plan A** so `.docx` ships and no jsdom is needed (D007); Zod is
+> **^4.1** (D011). Read `DECISIONS.md` before acting on anything below.
+
 **Purpose.** This is the file the build is driven from. Everything upstream of it describes
 *what* shared-docs is; this file decides *in what order it gets made, by whom, and what gets
 dropped when the clock wins*. It converts nine specs into 30 numbered tasks grouped into eight
@@ -21,7 +27,7 @@ disagree about *content*, the sibling wins and this file is edited.
 | **S1** | **Total budget is ~8 hours of wall clock.** | Every wave below carries a clock window, not just an estimate. Windows are the contract; estimates are the input. |
 | **S2** | **The sum of the slice budgets is ~15.5 agent-hours** (01: 1.25 · 02: 2.0 · 03: 1.0 · 04: 3.25 · 05: 2.0 · 06: 1.5 · 07: 0.5 · 08: 2.25 · 09: 1.75) — `04` lost 0.25 h when `DECISIONS.md` **D002** reduced the conflict system. | **8 hours of wall clock only exists if waves W1, W3, W4 and W6 run 3–4 agents wide** — which is exactly what **D001 decides**: the build runs 3–4 wide, the ~2.1× mean parallelism the 8-hour clock requires. If that ever collapses to one pair of hands with no delegation, this plan does not fit and you start pulling from §7's cut list at **hour 3**, not hour 6 — but that is the contingency, not the plan. Say this out loud before you start. |
 | **S3** | **Deploy a trivial slice to production at ~hour 2** (`00-foundation.md` R2, `07-deployment-runbook.md` §0). | T08 is a **gate**, not a task you get to reschedule. It answers four yes/no questions (build green · `prisma generate` ran · function reached Neon over the *pooled* URL · migration landed). Everything in R2 fails at deploy time only, so a deploy at hour 7 is an unknown-unknown with no runway behind it. |
-| **S4** | **The R1 import spike is a 30-minute hard time-box, and it happens FIRST** (`05-import-spec.md` §5.1). | T03 starts the moment `pnpm add` finishes. At T+30 you pick Plan A, B or C from `05-import-spec.md` §5.5 and move on. You do not extend the box. `_toolchain-findings.md` TRAP-3 already confirmed `@tiptap/html@3` ships no DOM, so **start on Plan B (jsdom), not Plan A.** No import UI, no import route, no editor toolbar work begins before this is settled — the spike also freezes `lib/editor-extensions.ts`, which two later tasks import. |
+| **S4** | **The R1 import spike is a 30-minute hard time-box, and it happens FIRST** (`05-import-spec.md` §5.1). | T03 starts the moment `pnpm add` finishes. At T+30 you pick Plan A, B or C from `05-import-spec.md` §5.5 and move on. You do not extend the box. **RESOLVED — D007: the spike PASSED on Plan A in ~6 minutes. `@tiptap/html@3` ships a `node` conditional export; no DOM shim is needed and `.docx` is not at risk.** (TRAP-3's inference was wrong; see D007.) No import UI, no import route, no editor toolbar work begins before this is settled — the spike also freezes `lib/editor-extensions.ts`, which two later tasks import. |
 | **S5** | **Feature freeze at hour 5:30.** | Moved from 6:00: `08-docs-plan.md` measures 2 h 15 and `09-video-and-submission.md` measures 1 h 45, i.e. **4 h of post-freeze work against the old 2 h reserve** (`00-foundation.md` §9/R5, now rewritten). At 5:30, whatever is merged is the product. A task not merged at 5:30 is cut per §7 and written into `SUBMISSION.md` under "what is incomplete" — it is not finished at 5:50. After the freeze a deploy that fails the smoke test is **rolled back, not debugged** (`07-deployment-runbook.md` §0). |
 | **S6** | **The last ~2.5 hours are docs + video + submission and are NOT compressible.** | W6 and W7 are 3.45 agent-hours in 2 wall-hours, and ~1.6 of those hours are strictly human (recording, Drive, the logged-out verification). The docs are four of the brief's own deliverables and the video is a graded artifact; borrowing from this block to finish a feature trades a graded thing for an ungraded one. Both `08-docs-plan.md` §9.1 and `09-video-and-submission.md` §OQ1 flag that `00-foundation.md` R5's two-hour reserve is *already* too small — this plan absorbs that by running the docs agents in parallel with the human's video prep, and by making `docs/ai-log.md` a continuous task from hour 0 so `AI-WORKFLOW.md` is a distillation rather than an act of creative writing at hour 7:15. |
 | **S7** | **`docs/ai-log.md` is written during the build, not after.** | T00 is continuous and belongs to the lead alone. Without it, `AI-WORKFLOW.md` §3 gets reconstructed from memory by a tired person and produces exactly the vague note the brief screens against. 15 minutes amortised across the day. |
@@ -65,7 +71,8 @@ of them stops and asks the lead.
 | `app/globals.css`, `app/layout.tsx`, `components/ui/**` (shadcn) | **T06** | W1 | T14–T19. Tailwind v4 entry, theme tokens, and the `.prose-doc` block. Six UI tasks each adding a rule to one stylesheet is the classic four-way conflict. |
 | `lib/permissions.ts`, `lib/session-token.ts`, `middleware.ts` | **T05** | W1 | T07, T09–T13. One resolver, no route re-derives permissions inline (`00-foundation.md` §6 rule 2). |
 | `lib/api-types.ts`, `lib/schemas.ts`, `lib/api.ts`, `lib/client.ts`, `lib/documents/queries.ts` | **T07** | W2 | T09–T19 — **eleven downstream tasks.** This is why W2 exists as its own wave: nothing in W3 or W4 compiles until it lands. |
-| `docker-compose.test.yml`, `.env.test`, `vitest.config.ts` | **T04** | W1 | T20 |
+| `docker-compose.test.yml`, `.docker/initdb/01-dbs.sql` | **T01** (moved from T04 — **D005**) | W0 | T04, T20 |
+| `.env.test`, `vitest.config.ts` | **T04** | W1 | T20 |
 | `README.md` | **T22** | W6 (stub created by T01) | T25, T29. T01 writes a skeleton with the headings; **nothing between W0 and W6 touches it**, and T22 owns every word of the final content. |
 | `docs/ai-log.md` | **lead only (T00)** | continuous | T24. **Append-only.** A delegated agent never writes here — it returns its log entry as text and the lead pastes it. Concurrent appends to one log are the cheapest possible way to lose evidence. |
 | `app/documents/page.tsx` | **T15** | W4 | T16 ships the buttons as components; T15 renders them. Neither edits the other's files. |
@@ -765,7 +772,7 @@ A delegated agent gets a **prompt containing links, not a paste of the whole spe
 | T06 | `04-ui-spec.md` §§1, 3, 6.7, 9, 10 | it owns `globals.css` outright; nobody else adds a rule |
 | T07 | `02-api-contract.md` §§1–6, `04-ui-spec.md` §1.1 | eleven tasks block on it; the DTO field list must satisfy `04-ui-spec.md` §1.1 including `shareCount` |
 | T09–T11, T13 | `02-api-contract.md` §7 (its own subsection only), §4, §5 | the `401 → 404 → 403` order is non-negotiable; `403` is only reachable by someone who can already read |
-| T12 | `05-import-spec.md` (all), the T03 outcome | which plan (A/B/C) the spike landed on; cutting `.docx` is a **one-constant edit**, not a refactor |
+| T12 | `05-import-spec.md` (all), **D007** and **D010** | The spike landed on **Plan A** — `generateJSON` works server-side as shipped, no jsdom. `.docx` **ships**. **D010: `mammoth.convertToHtml` MUST pass `styleMap: ['u => u']` or underline is silently dropped (requirement C5).** |
 | T14–T19 | `04-ui-spec.md` (its own section), `02-api-contract.md` §3, §9 | branch on `err.code`, never on `err.message`; client hiding is UX, the server `403` is the control |
 | T20 | `06-test-plan.md` §5 (all) | assert `error.code`, never `error.message` |
 | T22–T24 | `08-docs-plan.md` (its own section), `docs/ai-log.md` | the `TKTK` placeholder convention, and that `grep -rn TKTK` must return nothing at the gate |

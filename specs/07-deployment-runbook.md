@@ -1,5 +1,11 @@
 # 07 — Deployment Runbook
 
+> ⚠️ **Superseded in places by `specs/DECISIONS.md`.** D005–D012 were ruled after this
+> file was written and OUTRANK it. In particular: Prisma is **6.19.3** (not 7.x) so
+> `prisma.config.ts` must NOT exist and `package.json#prisma.seed` is correct (D006);
+> risk **R1 is CLOSED on Plan A** so `.docx` ships and no jsdom is needed (D007); Zod is
+> **^4.1** (D011). Read `DECISIONS.md` before acting on anything below.
+
 **Purpose.** This is the operational document for getting `shared-docs` onto a public URL
 that reviewers can use, and for keeping it there. It is written to be executed literally,
 step by step, with no design thinking required on the day — because the thing that sinks
@@ -367,7 +373,9 @@ the deployment-relevant subset, not a competing definition. Two things in it cha
   it costs three seconds: `postinstall` is skipped when Vercel restores a cached `node_modules`, and
   the resulting failure — `Module not found: Can't resolve '@prisma/client'` — is a row in this
   runbook's own §8 troubleshooting table. Belt *and* braces, deliberately.
-- **There is no `prisma.seed` key.** `00-foundation.md` §2a pins Prisma **7.10.0**, which moved seed
+- **VOID — D006. There IS a `prisma.seed` key and it is correct.** The paragraph below assumed the
+  Prisma 7.10.0 pin; we are on **6.19.3**, where `package.json#prisma.seed` works and
+  `prisma.config.ts` must not exist. Original text: ~~`00-foundation.md` §2a pins Prisma **7.10.0**, which moved seed
   registration into `prisma.config.ts`. A `prisma.seed` block in `package.json` is silently ignored
   on 7.x, which means `pnpm prisma db seed` does nothing and `migrate reset` stops re-seeding.
 
@@ -643,7 +651,7 @@ Step 14 is the one a reviewer will actually try. It is worth the ten seconds.
 | `PrismaClientInitializationError` in Vercel runtime logs | `DATABASE_URL` missing for the environment being served (set for Production only, hitting a Preview URL), or wrong/expired Neon password, or missing `sslmode=require` | `vercel env ls` — confirm the var exists for **both** Production and Preview. Re-copy the string from Neon. Redeploy (env changes need a new deployment). |
 | `Module not found: Can't resolve '@prisma/client'` at build | `prisma generate` never ran — missing root `postinstall`, or a cached `node_modules` skipped it | Restore **both** `"postinstall": "prisma generate"` and `"build": "prisma generate && next build"` (§5.1–5.2) — the second exists precisely because the first can be skipped. Then in Vercel: **Deployments → ⋯ → Redeploy** with **"Use existing Build Cache" unticked**. |
 | The production URL shows a **Vercel login / SSO wall** to anyone who is not you | Deployment Protection is enabled for Production | Settings → Deployment Protection → disable for Production, then **verify from a logged-out incognito window**. Invisible to you otherwise (§0, §4a step 7b). |
-| `pnpm prisma db seed` prints nothing and inserts no rows | Prisma **7** ignores `package.json#prisma.seed`; seed registration moved to `prisma.config.ts` | Add `prisma.config.ts` per `01-data-and-persistence.md` §2. The same omission makes `prisma migrate reset` stop re-seeding, which the README promises it does. |
+| `pnpm prisma db seed` prints nothing and inserts no rows | **On the 6.19.3 pin (D006) this row does not apply** — `package.json#prisma.seed` is present and works. If it fires anyway, the key was deleted. | Restore `"prisma": { "seed": "tsx prisma/seed.ts" }` in `package.json`. Do **not** add `prisma.config.ts` — that is a Prisma 7 concept and 6.19.3 ignores it. |
 | Build log: *"Ignored build scripts: … Run pnpm approve-builds"* | pnpm 10 blocking dependency lifecycle scripts | Usually harmless because our root `postinstall` handles Prisma. If a native dep genuinely needs it, add `"pnpm": { "onlyBuiltDependencies": ["prisma", "@prisma/client", "esbuild"] }` to `package.json`. |
 | `FATAL: too many connections for role "neondb_owner"` / `Can't reach database server` under light load | `DATABASE_URL` is the **direct** string, not the pooled one — the classic swap (§2.4). Or `PrismaClient` is being constructed per request instead of via a module singleton. | Put the `-pooler` string in `DATABASE_URL`, keep `pgbouncer=true`, redeploy. Confirm `lib/db.ts` uses the `globalThis` singleton pattern. |
 | `prepared statement "s0" already exists` | Pooled connection without `pgbouncer=true` | Append `&pgbouncer=true` to `DATABASE_URL`, redeploy. |
@@ -782,7 +790,7 @@ still open.** The one item that was — the Neon region — is ruled in `DECISIO
       eye immediately before the final deploy.
 - [ ] `prisma/schema.prisma` declares both `url` and `directUrl`.
 - [ ] `package.json` contains `"postinstall": "prisma generate"`, `"build": "prisma generate && next build"`
-      and `"engines": {"node":"22.x"}`; `prisma.config.ts` registers the seed (there is **no**
+      and `"engines": {"node":"22.x"}`; `package.json#prisma.seed` registers the seed on the 6.19.3 pin — **no `prisma.config.ts`** (D006). ~~(there is **no**
       `prisma.seed` key on the 7.x pin); and the Vercel project's Node.js version reads 22.x.
 - [ ] The Vercel build command override is **off** — the value comes from `package.json` — and
       **no** migration command runs during the build.

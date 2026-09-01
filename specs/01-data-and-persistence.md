@@ -1,5 +1,11 @@
 # 01 — Data & Persistence
 
+> ⚠️ **Superseded in places by `specs/DECISIONS.md`.** D005–D012 were ruled after this
+> file was written and OUTRANK it. In particular: Prisma is **6.19.3** (not 7.x) so
+> `prisma.config.ts` must NOT exist and `package.json#prisma.seed` is correct (D006);
+> risk **R1 is CLOSED on Plan A** so `.docx` ships and no jsdom is needed (D007); Zod is
+> **^4.1** (D011). Read `DECISIONS.md` before acting on anything below.
+
 **Purpose.** This spec is the complete, buildable definition of everything that touches
 Postgres: the final Prisma schema (verbatim from `00-foundation.md` §5, plus the datasource
 and generator blocks it omits), why document content is a `Json` column holding a ProseMirror
@@ -24,7 +30,7 @@ Neon wiring 20m · content guard 15m · seed script 25m · verification pass 15m
 | `prisma/seed.ts` | idempotent demo data (§7) |
 | `lib/db.ts` | Prisma client singleton (§8) |
 | `lib/documents/content.ts` | `EMPTY_DOC`, `documentContentSchema`, `toDocumentContent` (§5) |
-| `prisma.config.ts` | seed registration — required by the Prisma 7 pin (`00-foundation.md` §2a) |
+| ~~`prisma.config.ts`~~ | **DO NOT CREATE — D006.** Prisma 6.19.3 uses `package.json#prisma.seed`, already present |
 | `.env` | `DATABASE_URL`, `DIRECT_URL`, `AUTH_SECRET` — gitignored |
 | `.env.example` | same keys, placeholder values — committed |
 | `.docker/initdb/01-dbs.sql` | creates the `shared_docs_dev` database inside the test container (§6.1) |
@@ -41,20 +47,20 @@ gives local dev a second database in the same container (§6.1).
 
 | Package | Version line | Dep type | Why |
 |---|---|---|---|
-| `prisma` | **`7.10.0` exact** | dev | CLI: migrate, generate, seed, studio |
-| `@prisma/client` | **`7.10.0` exact** | prod | Generated typed client — **byte-identical to the CLI version** |
+| `prisma` | **`6.19.3` exact** (D006) | dev | CLI: migrate, generate, seed, studio |
+| `@prisma/client` | **`6.19.3` exact** (D006) | prod | Generated typed client — **byte-identical to the CLI version** |
 | `zod` | `^4.1` | prod | Content shape-guard + every route body (`00-foundation.md` §7) |
 | `bcryptjs` | `3.0.3` | prod | Seed password hashing. v3 ships its own types — do **not** add `@types/bcryptjs` |
 | `tsx` | `^4.20` | dev | Runs `prisma/seed.ts` without a build step |
 
 ```bash
-pnpm add @prisma/client@7.10.0 zod bcryptjs
-pnpm add -D prisma@7.10.0 tsx
+pnpm add @prisma/client@6.19.3 zod@^4.1 bcryptjs
+pnpm add -D prisma@6.19.3 tsx
 ```
 
 Three pinning rules that other specs depend on (all canonical in `00-foundation.md` §2a):
 
-1. **Pin Prisma explicitly at `7.10.0`, both packages, never `@latest`.** `prisma@latest` currently
+1. **Pin Prisma explicitly at `6.19.3`, both packages, never `@latest`** (D006 — 7.x is a breaking redesign).** `prisma@latest` currently
    resolves to an `8.0.0-rc` CLI against a stable 7.x client, and that mismatch produces
    generate/migrate failures that are easy to misdiagnose as Neon or Vercel problems
    (`_toolchain-findings.md` TRAP-1). Add a one-line comment in `package.json` so nobody
